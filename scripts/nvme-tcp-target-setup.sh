@@ -4,6 +4,9 @@
 # https://blogs.oracle.com/linux/post/nvme-over-tcp
 # https://github.com/camelboat/EECS_6897_Distributed_Storage_System_Project_Scripts/tree/master/setup_scripts/NVME_over_Fabrics
 
+# format the device partition we want clients to use
+sudo mkfs.ext4 /dev/nvme0n1p4
+
 # nvme over tcp is fully supported since Linux kernel 5.0
 # so typically we should use at least ubuntu 19.04 or cent-os 8
 # otherwise the nvme_tcp module cannot be found

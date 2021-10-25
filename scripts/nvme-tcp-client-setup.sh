@@ -9,7 +9,8 @@ sudo modprobe nvme
 sudo modprobe nvme-tcp
 
 # install the nvme-cli tool
-sudo apt install nvme-cli
+sudo apt update & sudo apt install nvme-cli
+nvme gen-hostnqn | sudo tee /etc/nvme/hostnqn > /dev/null
 
 # ip address of the nvme target machine
 TARGET_IP_ADDR=10.10.1.3
@@ -18,3 +19,4 @@ TARGET_IP_ADDR=10.10.1.3
 sudo nvme discover -t tcp -a $TARGET_IP_ADDR -s 4420
 sudo nvme connect -t tcp -n nvmet-test -a $TARGET_IP_ADDR -s 4420
 
+echo "nvme-tcp client setup ok"
