@@ -5,7 +5,7 @@
 # install required packages
 sudo apt update
 sudo apt-get install libmlx4-1 infiniband-diags ibutils ibverbs-utils rdmacm-utils perftest \
-  rdma-core mstflint
+  rdma-core mstflint libibverbs-dev librdmacm-dev
 
 # verify the PCIe device is connected to the adapter card
 lspci | grep Mellanox
