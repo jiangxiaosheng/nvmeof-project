@@ -42,6 +42,6 @@ echo tcp | sudo tee -a addr_trtype > /dev/null
 echo 4420 | sudo tee -a addr_trsvcid > /dev/null
 echo ipv4 | sudo tee -a addr_adrfam > /dev/null
 
-sudo ln -s /sys/kernel/config/nvmet/subsystems/nvmet-test/ /sys/kernel/config/nvmet/ports/1/subsystems/nvmet-t
+sudo ln -s /sys/kernel/config/nvmet/subsystems/nvmet-test/ /sys/kernel/config/nvmet/ports/1/subsystems/nvmet-test
 
 echo "nvme-tcp configuration ok"
