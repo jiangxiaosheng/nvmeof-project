@@ -9,11 +9,11 @@ sudo modprobe nvme
 sudo modprobe nvme-tcp
 
 # install the nvme-cli tool
-sudo apt update & sudo apt install nvme-cli
+sudo apt update & sudo apt install nvme-cli libaio-dev -y
 nvme gen-hostnqn | sudo tee /etc/nvme/hostnqn > /dev/null
 
 # ip address of the nvme target machine
-TARGET_IP_ADDR=10.10.1.3
+TARGET_IP_ADDR=10.10.1.1
 
 # discover the remote nvme target and connect to it
 sudo nvme discover -t tcp -a $TARGET_IP_ADDR -s 4420
