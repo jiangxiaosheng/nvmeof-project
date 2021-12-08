@@ -13,7 +13,7 @@ do
 
   fio --cpus_allowed_policy=split --rw=randread --direct=1 --ioengine=libaio \
   --size=1G --gtod_reduce=0 --thread --group_reporting --time_based --runtime=60 --bs=4k --iodepth=128 \
-  --cpus_allowed=0-15 --numjobs="$jobs" --name=random_read --filename=/dev/nvme1n1 --output "$results_dir"/randread."$jobs".txt
+  --cpus_allowed=0-15 --numjobs="$jobs" --name=random_read --filename=/dev/nvme0n1 --output "$results_dir"/randread."$jobs".txt
 
   echo "==========================================================="
 done
