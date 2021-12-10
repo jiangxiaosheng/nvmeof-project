@@ -1,0 +1,34 @@
+filename0: (g=0): rw=randread, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=spdk_bdev, iodepth=32
+fio-3.28-123-ged7f
+Starting 1 thread
+[2021-12-08 14:41:55.264021] Starting SPDK v22.01-pre git sha1 b426999 / DPDK 21.08.0 initialization...
+[2021-12-08 14:41:55.264084] [ DPDK EAL parameters: [2021-12-08 14:41:55.264091] fio [2021-12-08 14:41:55.264096] --no-shconf [2021-12-08 14:41:55.264100] -c 0x1 [2021-12-08 14:41:55.264104] --log-level=lib.eal:6 [2021-12-08 14:41:55.264108] --log-level=lib.cryptodev:5 [2021-12-08 14:41:55.264112] --log-level=user1:6 [2021-12-08 14:41:55.264118] --iova-mode=pa [2021-12-08 14:41:55.264122] --base-virtaddr=0x200000000000 [2021-12-08 14:41:55.264126] --match-allocations [2021-12-08 14:41:55.264131] --file-prefix=spdk_pid2337 [2021-12-08 14:41:55.264136] ]
+EAL: No available 1048576 kB hugepages reported
+TELEMETRY: No legacy callbacks, legacy socket not created
+[2021-12-08 14:41:55.282655] accel_engine.c:1012:spdk_accel_engine_initialize: *NOTICE*: Accel engine initialized to use software engine.
+^Cbs: 1 (f=1): [r(1)][16.7%][r=3351MiB/s][r=858k IOPS][eta 00m:50s]
+fio: terminating on signal 2
+
+filename0: (groupid=0, jobs=1): err= 0: pid=2358: Wed Dec  8 14:42:05 2021
+  read: IOPS=858k, BW=3350MiB/s (3513MB/s)(31.9GiB/9749msec)
+    slat (nsec): min=85, max=35129, avg=98.16, stdev=24.03
+    clat (nsec): min=19963, max=95154, avg=37038.54, stdev=418.18
+     lat (nsec): min=20444, max=95500, avg=37136.70, stdev=408.78
+    clat percentiles (nsec):
+     |  1.00th=[36608],  5.00th=[37120], 10.00th=[37120], 20.00th=[37120],
+     | 30.00th=[37120], 40.00th=[37120], 50.00th=[37120], 60.00th=[37120],
+     | 70.00th=[37120], 80.00th=[37120], 90.00th=[37120], 95.00th=[37120],
+     | 99.00th=[37632], 99.50th=[37632], 99.90th=[39168], 99.95th=[39680],
+     | 99.99th=[42240]
+   bw (  MiB/s): min= 3350, max= 3351, per=100.00%, avg=3350.86, stdev= 0.33, samples=19
+   iops        : min=857610, max=857890, avg=857820.63, stdev=83.73, samples=19
+  lat (usec)   : 20=0.01%, 50=100.00%, 100=0.01%
+  cpu          : usr=100.01%, sys=0.00%, ctx=12, majf=0, minf=12
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.1%, 16=0.3%, 32=99.7%, >=64=0.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.1%, 16=0.1%, 32=0.1%, 64=0.0%, >=64=0.0%
+     issued rwts: total=8360291,0,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=32
+
+Run status group 0 (all jobs):
+   READ: bw=3350MiB/s (3513MB/s), 3350MiB/s-3350MiB/s (3513MB/s-3513MB/s), io=31.9GiB (34.2GB), run=9749-9749msec
