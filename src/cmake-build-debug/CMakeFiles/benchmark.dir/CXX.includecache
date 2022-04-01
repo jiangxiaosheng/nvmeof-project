@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/codes/project/6897-nvme-rdma-project/src/common.hpp
+sys/types.h
+-
+fcntl.h
+-
+libnvme.h
+-
+
+/codes/project/6897-nvme-rdma-project/src/local_read.cpp
+cerrno
+-
+fcntl.h
+/codes/project/6897-nvme-rdma-project/src/fcntl.h
+chrono
+-
+libgen.h
+-
+string
+-
+common.hpp
+/codes/project/6897-nvme-rdma-project/src/common.hpp
+

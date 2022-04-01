@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/benchmark.dir/local_read.cpp.o -o benchmark  -lnvme 
