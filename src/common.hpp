@@ -1,18 +1,26 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <libnvme.h>
+#include <unistd.h>
 
 struct device_config
 {
 	__u32 namespace_id;
 	char *name;
-	uint32_t number_of_logical_blocks;
+	__le64 number_of_logical_blocks;
+	int logical_block_size;
 } config;
+
+void dump_config() {
+	printf("device: %s\n", config.name);
+	printf("namespace id: %d\n", config.namespace_id);
+	printf("number of logical blocks: %lld\n", config.number_of_logical_blocks);
+	printf("logical block size: %d bytes\n", config.logical_block_size);
+}
 
 int open_bdev(char *dev, int flags)
 {
-	auto device_name = basename(dev);
-	int fd = open(device_name, flags);
+	int fd = open(dev, flags);
 	if (fd < 0)
 		perror("open block device failed");
 	return fd;
@@ -20,13 +28,28 @@ int open_bdev(char *dev, int flags)
 
 int init_device_config() {
 	struct nvme_id_ns ns;
-	__u32 namespace_id;
-	int fd;
+	int fd, err;
 
-	fd = open_bdev(config.name, O_RDWR | O_DIRECT);
+	fd = open_bdev(config.name, O_RDONLY);
 
-	nvme_get_nsid(fd, &namespace_id);
-	printf("namespace id is %d\n", namespace_id);
+	err = nvme_get_nsid(fd, &config.namespace_id);
+	if (err)
+		perror("get nsid failed");
+
+	err = nvme_get_logical_block_size(fd, config.namespace_id, &config.logical_block_size);
+	if (err)
+		perror("get logical block size failed");
+
+	err = nvme_identify_ns(fd, config.namespace_id, &ns);
+	if (err)
+		perror("identify namespace failed");
+
+	config.number_of_logical_blocks = ns.nsze;
+	
+	close(fd);
+
+	printf("init ok!\n\n");
+	dump_config();
 
 	return 0;
 }

@@ -1,3 +1,0 @@
-/codes/project/6897-nvme-rdma-project/src/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/codes/project/6897-nvme-rdma-project/src/cmake-build-debug/CMakeFiles/edit_cache.dir
-/codes/project/6897-nvme-rdma-project/src/cmake-build-debug/CMakeFiles/benchmark.dir

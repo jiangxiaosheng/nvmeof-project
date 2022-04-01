@@ -1,4 +1,0 @@
-C:\windows\system32\wsl.exe --distribution Ubuntu-18.04 --exec /usr/bin/zsh -c "export CLION_IDE=TRUE && export JETBRAINS_IDE=TRUE && cd /mnt/d/codes/project/6897-nvme-rdma-project/src/cmake-build-debug && /usr/local/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G 'CodeBlocks - Unix Makefiles' /mnt/d/codes/project/6897-nvme-rdma-project/src; exitcode=$?; sleep 0.001; (exit $exitcode)"
--- Configuring done
--- Generating done
--- Build files have been written to: /mnt/d/codes/project/6897-nvme-rdma-project/src/cmake-build-debug
