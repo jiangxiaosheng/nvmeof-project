@@ -17,8 +17,8 @@ sudo modprobe nvmet
 sudo modprobe nvmet-tcp
 
 # create a new nvme subsystem called nvmet-test
-sudo mkdir /sys/kernel/config/nvmet/subsystems/nvmet-test
-cd /sys/kernel/config/nvmet/subsystems/nvmet-test
+sudo mkdir /sys/kernel/config/nvmet/subsystems/nvmet-tcp
+cd /sys/kernel/config/nvmet/subsystems/nvmet-tcp
 
 # enable the target can be accessed by any other client
 echo 1 | sudo tee -a attr_allow_any_host > /dev/null
@@ -28,7 +28,7 @@ sudo mkdir namespaces/1
 cd namespaces/1/
 
 # set the path of the nvme device, default is /dev/nvme0n1 (in cloudlab m510 machines)
-sudo echo -n /dev/nvme0n1 | sudo tee -a device_path > /dev/null
+sudo echo -n /dev/nvme1n1 | sudo tee -a device_path > /dev/null
 echo 1 | sudo tee -a enable > /dev/null
 
 
@@ -42,6 +42,6 @@ echo tcp | sudo tee -a addr_trtype > /dev/null
 echo 4420 | sudo tee -a addr_trsvcid > /dev/null
 echo ipv4 | sudo tee -a addr_adrfam > /dev/null
 
-sudo ln -s /sys/kernel/config/nvmet/subsystems/nvmet-test/ /sys/kernel/config/nvmet/ports/1/subsystems/nvmet-test
+sudo ln -s /sys/kernel/config/nvmet/subsystems/nvmet-tcp/ /sys/kernel/config/nvmet/ports/1/subsystems/nvmet-tcp
 
 echo "nvme-tcp configuration ok"

@@ -1,0 +1,5 @@
+/users/sjiang/nvmeof-project/src/build/CMakeFiles/rebuild_cache.dir
+/users/sjiang/nvmeof-project/src/build/CMakeFiles/edit_cache.dir
+/users/sjiang/nvmeof-project/src/build/CMakeFiles/target.dir
+/users/sjiang/nvmeof-project/src/build/CMakeFiles/initiator.dir
+/users/sjiang/nvmeof-project/src/build/CMakeFiles/benchmark.dir

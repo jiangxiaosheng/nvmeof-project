@@ -4,8 +4,8 @@
 
 # install required packages
 sudo apt update
-sudo apt-get install -y libmlx4-1 infiniband-diags ibutils ibverbs-utils rdmacm-utils perftest \
-  rdma-core mstflint libibverbs-dev librdmacm-dev
+sudo apt-get install -y infiniband-diags ibutils ibverbs-utils rdmacm-utils perftest \
+  rdma-core mstflint libibverbs-dev librdmacm-dev libmlx5-1
 
 # install the OFED driver
 # first clean the unnecessary drivers from various providers

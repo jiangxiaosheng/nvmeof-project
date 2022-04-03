@@ -3,14 +3,13 @@
 #include <chrono>
 #include <libgen.h>
 #include <string>
-#include "common.hpp"
+#include "nvme.h"
 #include <cstring>
 #include <random>
 
 using namespace std;
 
 const int N = 1'000'000;
-// const int N = 1;
 
 long random_start_block() {
 	static random_device rd;
@@ -20,8 +19,7 @@ long random_start_block() {
 	return dist(mt) % config.number_of_logical_blocks;
 }
 
-void test_write_throughput_random()
-{
+void test_write_throughput_random() {
 	decltype(chrono::system_clock::now()) start_time, end_time, total_time;
 	int fd, err;
 	char *buffer;
@@ -32,7 +30,7 @@ void test_write_throughput_random()
 	args.args_size = sizeof(args);
 	args.fd = fd;
 	args.nsid = config.namespace_id;
-	args.nlb = 1;
+	args.nlb = 0;
 	args.data_len = config.logical_block_size;
 	args.result = NULL;
 
@@ -48,8 +46,14 @@ void test_write_throughput_random()
 		start_time = chrono::system_clock::now();
 		err = nvme_write(&args);
 		end_time = chrono::system_clock::now();
-		if (err)
-			perror("nvme write failed");
+		
+		if (err < 0) {
+			fprintf(stderr, "submit-io: %s\n", nvme_strerror(errno));
+			return;
+		} else if (err) {
+			nvme_show_status(err);
+			return;
+		}
 		
 		total_time += end_time - start_time;
 		
@@ -63,14 +67,10 @@ void test_write_throughput_random()
 	printf("IOPS for random writting (512 bytes) is %f\n", N * 1.0 / chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);
 }
 
-void test_write_throughput_sequential()
-{
-}
+void test_write_throughput_sequential() {}
 
-int main(int argc, const char **argv)
-{
+int main(int argc, const char **argv) {
 	config.name = (char *)argv[1];
-	// config.namespace_id = 0x1;
 
 	init_device_config();
 

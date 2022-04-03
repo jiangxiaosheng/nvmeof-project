@@ -1,0 +1,38 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/users/sjiang/nvmeof-project/src/local_read.cpp
+cerrno
+-
+fcntl.h
+/users/sjiang/nvmeof-project/src/fcntl.h
+chrono
+-
+libgen.h
+-
+string
+-
+nvme.h
+/users/sjiang/nvmeof-project/src/nvme.h
+cstring
+-
+random
+-
+
+/users/sjiang/nvmeof-project/src/nvme.h
+sys/types.h
+-
+fcntl.h
+-
+libnvme.h
+-
+unistd.h
+-
+cstring
+-
+
