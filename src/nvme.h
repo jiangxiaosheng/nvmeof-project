@@ -70,3 +70,8 @@ ret:
 
 	return 0;
 }
+
+struct nvme_data_packet {
+	int start_block;
+	
+};

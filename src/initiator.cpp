@@ -28,19 +28,18 @@ int main(int argc, const char **argv) {
 	start_time = chrono::system_clock::now();
 	for (int i = 0; i < N; i++) {
 		conn.send(buffer, config.logical_block_size);
-		// sleep(1);
-		// cout << "send " << i << " block" << endl;
 	}
-	end_time = chrono::system_clock::now();
-	delete[] buffer;
 
 	conn.recv(buffer, 5);
 	if (strcmp(buffer, "done") != 0) {
+		delete[] buffer;
 		cerr << "error" << endl;
 		return -1;
 	}
 
+	end_time = chrono::system_clock::now();
 	total_time += end_time - start_time;
+	delete[] buffer;
 
 	printf("total time for random write is %lu microseconds\n", 
 		chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count());
