@@ -8,26 +8,28 @@ using namespace std;
 const int N = 1'000'000;
 
 int main(int argc, const char **argv) {
-	string device = "mlx5_0";
+	int data_size;
 	string addr = "0.0.0.0";
 	if (argc >= 3)
 		addr = argv[2];
 	if (argc == 4)
-		device = argv[3];
+		data_size = atoi(argv[3]);
 	TCPConnection conn(INITIATOR, addr, 9875);
 	conn.init();
 
 	config.name = (char *)argv[1];
 
 	init_device_config();
+	if (argc < 4)
+		data_size = config.logical_block_size;
 
 	decltype(chrono::system_clock::now()) start_time, end_time, total_time;
 
-	char *buffer = new char[config.logical_block_size];
+	char *buffer = new char[data_size];
 
 	start_time = chrono::system_clock::now();
 	for (int i = 0; i < N; i++) {
-		conn.send(buffer, config.logical_block_size);
+		conn.send(buffer, data_size);
 	}
 
 	conn.recv(buffer, 5);

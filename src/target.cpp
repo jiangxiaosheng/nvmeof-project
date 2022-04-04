@@ -15,10 +15,10 @@ long random_start_block() {
 	return dist(mt) % config.number_of_logical_blocks;
 }
 
-void test_write_throughput_random(Connection &conn) {
+void test_write_throughput_random(Connection &conn, int data_size) {
 	decltype(chrono::system_clock::now()) start_time, end_time, total_time;
 	int fd, err;
-	char buffer[512];
+	char *buffer = new char[data_size];
 	int count = 0;
 
 	fd = open_bdev(config.name, O_WRONLY | O_DIRECT);
@@ -27,13 +27,13 @@ void test_write_throughput_random(Connection &conn) {
 	args.args_size = sizeof(args);
 	args.fd = fd;
 	args.nsid = config.namespace_id;
-	args.nlb = 0;
+	args.nlb = data_size / config.logical_block_size;
 	args.data_len = config.logical_block_size;
 	args.result = NULL;
 
 	// start_time = chrono::system_clock::now();
 	for (int i = 0; i < N; i++) {
-		int size = conn.recv(buffer, config.logical_block_size);
+		int size = conn.recv(buffer, data_size);
 		if (size < 0) {
 			perror("recv failed");
 			break;
@@ -63,6 +63,8 @@ void test_write_throughput_random(Connection &conn) {
 	// end_time = chrono::system_clock::now();
 	// total_time += end_time - start_time;
 
+	delete[] buffer;
+
 	// printf("total time for random write is %lu microseconds\n", chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count());
 	// printf("total data written is %u bytes\n", count * config.logical_block_size);
 	// printf("throughput for random writting (512 bytes) is %f Gb/s\n", (count * config.logical_block_size) * 1.0 / 1024 / 1024 / 1024 / 
@@ -71,18 +73,17 @@ void test_write_throughput_random(Connection &conn) {
 }
 
 int main(int argc, const char **argv) {
-	string device = "mlx5_0";
-	string addr = "0.0.0.0";
-	if (argc >= 3)
-		addr = argv[2];
-	if (argc == 4)
-		device = argv[3];
-	TCPConnection conn(TARGET, addr, 9875);
+	int data_size;
+	if (argc == 3)
+		data_size = atoi(argv[2]);
+	TCPConnection conn(TARGET, 9875);
 	conn.init();
 
 	config.name = (char *)argv[1];
 
 	init_device_config();
+	if (argc < 3)
+		data_size = config.logical_block_size;
 
-	test_write_throughput_random(conn);
+	test_write_throughput_random(conn, data_size);
 }

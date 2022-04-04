@@ -292,6 +292,8 @@ public:
 	TCPConnection(int role, std::string &address, int port):
 		role(role), address(address), port(port) {}
 
+	TCPConnection(int role, int port): role(role), port(port) {}
+
 	int init() {
 		if (role == TARGET) {
 			int sock = socket(AF_INET, SOCK_STREAM, 0);

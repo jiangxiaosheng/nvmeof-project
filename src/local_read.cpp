@@ -19,7 +19,7 @@ long random_start_block() {
 	return dist(mt) % config.number_of_logical_blocks;
 }
 
-void test_write_throughput_random() {
+void test_write_throughput_random(int data_size) {
 	decltype(chrono::system_clock::now()) start_time, end_time, total_time;
 	int fd, err;
 	char *buffer;
@@ -30,17 +30,17 @@ void test_write_throughput_random() {
 	args.args_size = sizeof(args);
 	args.fd = fd;
 	args.nsid = config.namespace_id;
-	args.nlb = 0;
-	args.data_len = config.logical_block_size;
+	args.nlb = data_size / config.logical_block_size;
+	args.data_len = data_size;
 	args.result = NULL;
 
 	for (int i = 0; i < N; i++) {
-		buffer = (char *) malloc(config.logical_block_size);
+		buffer = (char *) malloc(data_size);
 		args.data = buffer;
 		args.slba = random_start_block();
 		// memcpy(args.data, "123\n", 4);
-		// if (i % 10000 == 0 && i != 0)
-		// 	printf("%d blocks written\n", i);
+		if (i % 50000 == 0 && i != 0)
+			printf("%d blocks written\n", i);
 
 		// printf("write block %llu\n", args.slba);
 		start_time = chrono::system_clock::now();
@@ -74,5 +74,5 @@ int main(int argc, const char **argv) {
 
 	init_device_config();
 
-	test_write_throughput_random();
+	test_write_throughput_random(2048);
 }
