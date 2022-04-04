@@ -9,7 +9,7 @@ add_executable(benchmark local_read.cpp)
 target_link_libraries(benchmark nvme)
 
 add_executable(initiator initiator.cpp)
-target_link_libraries(initiator ibverbs)
+target_link_libraries(initiator ibverbs nvme)
 
 add_executable(target target.cpp)
-target_link_libraries(target ibverbs)
+target_link_libraries(target ibverbs nvme)

@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/initiator.dir/initiator.cpp.o  -o initiator  -libverbs 
+/usr/bin/c++     CMakeFiles/initiator.dir/initiator.cpp.o  -o initiator  -libverbs -lnvme 

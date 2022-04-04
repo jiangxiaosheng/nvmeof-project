@@ -4,4 +4,5 @@
 CMakeFiles/initiator.dir/initiator.cpp.o: ../third_party/json.hpp
 CMakeFiles/initiator.dir/initiator.cpp.o: ../initiator.cpp
 CMakeFiles/initiator.dir/initiator.cpp.o: ../net.h
+CMakeFiles/initiator.dir/initiator.cpp.o: ../nvme.h
 

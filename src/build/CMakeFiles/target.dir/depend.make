@@ -3,5 +3,6 @@
 
 CMakeFiles/target.dir/target.cpp.o: ../third_party/json.hpp
 CMakeFiles/target.dir/target.cpp.o: ../net.h
+CMakeFiles/target.dir/target.cpp.o: ../nvme.h
 CMakeFiles/target.dir/target.cpp.o: ../target.cpp
 

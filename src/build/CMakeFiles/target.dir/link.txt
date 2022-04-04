@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/target.dir/target.cpp.o  -o target  -libverbs 
+/usr/bin/c++     CMakeFiles/target.dir/target.cpp.o  -o target  -libverbs -lnvme 
