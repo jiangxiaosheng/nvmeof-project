@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <chrono>
+#include <sstream>
 
 #include "nvme.h"
 #include "block.grpc.pb.h"
@@ -425,6 +427,7 @@ public:
 	}
 
 	Status WriteBlock(ServerContext *ctx, const BlockRequest *request, BlockReply *reply)  {
+		auto total_start = std::chrono::system_clock::now();
 		static struct nvme_io_args args {
 			.result = NULL,
 			.args_size = sizeof(args),
@@ -433,13 +436,34 @@ public:
 		};
 
 		args.slba = request->start_block();
-		args.nlb = request->size() / config.logical_block_size;
-		if (request->size() % config.logical_block_size != 0)
-			args.nlb++;
-		args.data_len = request->size();
-		args.data = const_cast<char*>(request->data().data());
+		int actual_len;
+
+		if (request->size() % config.logical_block_size != 0) {
+			args.nlb = request->size() / config.logical_block_size;
+		} else {
+			args.nlb = request->size() / config.logical_block_size - 1;
+		}
+		actual_len = (args.nlb + 1) * config.logical_block_size;
 		
+		args.data_len = actual_len;
+
+		auto start = std::chrono::system_clock::now();
+		args.data = new char[actual_len];
+		memcpy(args.data, request->data().data(), request->data().size());
+		time_on_allocation += std::chrono::system_clock::now() - start;
+		// args.data = const_cast<char*>(request->data().data());
+
+		// dump args
+		// printf("slba = %lld\n", args.slba);
+		// printf("nlb = %d\n", args.nlb);
+		// printf("data_len = %d\n", args.data_len);
+		
+		start = std::chrono::system_clock::now();
 		int err = nvme_write(&args);
+		time_on_writes += std::chrono::system_clock::now() - start;
+		delete[] (char *) args.data;
+
+		time_total += std::chrono::system_clock::now() - total_start;
 		if (err < 0) {
 			fprintf(stderr, "submit-io: %s\n", nvme_strerror(errno));
 			return Status(StatusCode::UNKNOWN, "nvme write error");
@@ -448,6 +472,18 @@ public:
 			return Status(StatusCode::UNKNOWN, "nvme write error");
 		}
 
+		return Status::OK;
+	}
+
+	Status GetStat(ServerContext *context, const StatRequest *request, StatReply *response) {
+		std::stringstream ss;
+		ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
+			<< " ms\n" << "time on writes is " 
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_writes.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
+			<< " ms\n";
+		response->set_stat(ss.str());
 		return Status::OK;
 	}
 
@@ -476,4 +512,5 @@ private:
 	int port;
 	int blk_fd;
 	struct device_config config;
+	decltype(std::chrono::system_clock::now()) time_on_allocation, time_on_writes, time_total;
 };
