@@ -56,17 +56,6 @@ CMAKE_BINARY_DIR = /users/sjiang/nvmeof-project/src/build
 #=============================================================================
 # Targets provided globally by CMake.
 
-# Special rule for the target rebuild_cache
-rebuild_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
-.PHONY : rebuild_cache
-
-# Special rule for the target rebuild_cache
-rebuild_cache/fast: rebuild_cache
-
-.PHONY : rebuild_cache/fast
-
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "No interactive CMake dialog available..."
@@ -77,6 +66,17 @@ edit_cache:
 edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
+
+# Special rule for the target rebuild_cache
+rebuild_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
+	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : rebuild_cache
+
+# Special rule for the target rebuild_cache
+rebuild_cache/fast: rebuild_cache
+
+.PHONY : rebuild_cache/fast
 
 # The main all target
 all: cmake_check_build_system
@@ -111,17 +111,17 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named target
+# Target rules for targets named benchmark
 
 # Build rule for target.
-target: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 target
-.PHONY : target
+benchmark: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 benchmark
+.PHONY : benchmark
 
 # fast build rule for target.
-target/fast:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/build
-.PHONY : target/fast
+benchmark/fast:
+	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/build
+.PHONY : benchmark/fast
 
 #=============================================================================
 # Target rules for targets named initiator
@@ -137,98 +137,165 @@ initiator/fast:
 .PHONY : initiator/fast
 
 #=============================================================================
-# Target rules for targets named benchmark
+# Target rules for targets named target
 
 # Build rule for target.
-benchmark: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 benchmark
-.PHONY : benchmark
+target: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 target
+.PHONY : target
 
 # fast build rule for target.
-benchmark/fast:
-	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/build
-.PHONY : benchmark/fast
+target/fast:
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/build
+.PHONY : target/fast
 
-initiator.o: initiator.cpp.o
+#=============================================================================
+# Target rules for targets named grpc_proto
+
+# Build rule for target.
+grpc_proto: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 grpc_proto
+.PHONY : grpc_proto
+
+# fast build rule for target.
+grpc_proto/fast:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/build
+.PHONY : grpc_proto/fast
+
+block.grpc.pb.o: block.grpc.pb.cc.o
+
+.PHONY : block.grpc.pb.o
+
+# target to build an object file
+block.grpc.pb.cc.o:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.grpc.pb.cc.o
+.PHONY : block.grpc.pb.cc.o
+
+block.grpc.pb.i: block.grpc.pb.cc.i
+
+.PHONY : block.grpc.pb.i
+
+# target to preprocess a source file
+block.grpc.pb.cc.i:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.grpc.pb.cc.i
+.PHONY : block.grpc.pb.cc.i
+
+block.grpc.pb.s: block.grpc.pb.cc.s
+
+.PHONY : block.grpc.pb.s
+
+# target to generate assembly for a file
+block.grpc.pb.cc.s:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.grpc.pb.cc.s
+.PHONY : block.grpc.pb.cc.s
+
+block.pb.o: block.pb.cc.o
+
+.PHONY : block.pb.o
+
+# target to build an object file
+block.pb.cc.o:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.pb.cc.o
+.PHONY : block.pb.cc.o
+
+block.pb.i: block.pb.cc.i
+
+.PHONY : block.pb.i
+
+# target to preprocess a source file
+block.pb.cc.i:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.pb.cc.i
+.PHONY : block.pb.cc.i
+
+block.pb.s: block.pb.cc.s
+
+.PHONY : block.pb.s
+
+# target to generate assembly for a file
+block.pb.cc.s:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/block.pb.cc.s
+.PHONY : block.pb.cc.s
+
+initiator.o: initiator.cc.o
 
 .PHONY : initiator.o
 
 # target to build an object file
-initiator.cpp.o:
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cpp.o
-.PHONY : initiator.cpp.o
+initiator.cc.o:
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cc.o
+.PHONY : initiator.cc.o
 
-initiator.i: initiator.cpp.i
+initiator.i: initiator.cc.i
 
 .PHONY : initiator.i
 
 # target to preprocess a source file
-initiator.cpp.i:
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cpp.i
-.PHONY : initiator.cpp.i
+initiator.cc.i:
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cc.i
+.PHONY : initiator.cc.i
 
-initiator.s: initiator.cpp.s
+initiator.s: initiator.cc.s
 
 .PHONY : initiator.s
 
 # target to generate assembly for a file
-initiator.cpp.s:
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cpp.s
-.PHONY : initiator.cpp.s
+initiator.cc.s:
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/initiator.cc.s
+.PHONY : initiator.cc.s
 
-local_read.o: local_read.cpp.o
+local_read.o: local_read.cc.o
 
 .PHONY : local_read.o
 
 # target to build an object file
-local_read.cpp.o:
-	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cpp.o
-.PHONY : local_read.cpp.o
+local_read.cc.o:
+	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cc.o
+.PHONY : local_read.cc.o
 
-local_read.i: local_read.cpp.i
+local_read.i: local_read.cc.i
 
 .PHONY : local_read.i
 
 # target to preprocess a source file
-local_read.cpp.i:
-	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cpp.i
-.PHONY : local_read.cpp.i
+local_read.cc.i:
+	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cc.i
+.PHONY : local_read.cc.i
 
-local_read.s: local_read.cpp.s
+local_read.s: local_read.cc.s
 
 .PHONY : local_read.s
 
 # target to generate assembly for a file
-local_read.cpp.s:
-	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cpp.s
-.PHONY : local_read.cpp.s
+local_read.cc.s:
+	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/local_read.cc.s
+.PHONY : local_read.cc.s
 
-target.o: target.cpp.o
+target.o: target.cc.o
 
 .PHONY : target.o
 
 # target to build an object file
-target.cpp.o:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cpp.o
-.PHONY : target.cpp.o
+target.cc.o:
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cc.o
+.PHONY : target.cc.o
 
-target.i: target.cpp.i
+target.i: target.cc.i
 
 .PHONY : target.i
 
 # target to preprocess a source file
-target.cpp.i:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cpp.i
-.PHONY : target.cpp.i
+target.cc.i:
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cc.i
+.PHONY : target.cc.i
 
-target.s: target.cpp.s
+target.s: target.cc.s
 
 .PHONY : target.s
 
 # target to generate assembly for a file
-target.cpp.s:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cpp.s
-.PHONY : target.cpp.s
+target.cc.s:
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/target.cc.s
+.PHONY : target.cc.s
 
 # Help Target
 help:
@@ -236,11 +303,18 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... target"
-	@echo "... initiator"
 	@echo "... benchmark"
+	@echo "... initiator"
+	@echo "... target"
+	@echo "... rebuild_cache"
+	@echo "... grpc_proto"
+	@echo "... block.grpc.pb.o"
+	@echo "... block.grpc.pb.i"
+	@echo "... block.grpc.pb.s"
+	@echo "... block.pb.o"
+	@echo "... block.pb.i"
+	@echo "... block.pb.s"
 	@echo "... initiator.o"
 	@echo "... initiator.i"
 	@echo "... initiator.s"

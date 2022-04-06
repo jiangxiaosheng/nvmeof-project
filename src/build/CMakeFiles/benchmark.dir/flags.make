@@ -6,5 +6,5 @@ CXX_FLAGS =   -std=gnu++17
 
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/users/sjiang/nvmeof-project/src/third_party 
+CXX_INCLUDES = -I/users/sjiang/nvmeof-project/src/build -I/users/sjiang/nvmeof-project/src/third_party 
 

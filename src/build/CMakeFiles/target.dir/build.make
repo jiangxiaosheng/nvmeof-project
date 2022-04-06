@@ -57,28 +57,88 @@ include CMakeFiles/target.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/target.dir/flags.make
 
-CMakeFiles/target.dir/target.cpp.o: CMakeFiles/target.dir/flags.make
-CMakeFiles/target.dir/target.cpp.o: ../target.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/target.dir/target.cpp.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/target.dir/target.cpp.o -c /users/sjiang/nvmeof-project/src/target.cpp
+CMakeFiles/target.dir/target.cc.o: CMakeFiles/target.dir/flags.make
+CMakeFiles/target.dir/target.cc.o: ../target.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/target.dir/target.cc.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/target.dir/target.cc.o -c /users/sjiang/nvmeof-project/src/target.cc
 
-CMakeFiles/target.dir/target.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/target.dir/target.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /users/sjiang/nvmeof-project/src/target.cpp > CMakeFiles/target.dir/target.cpp.i
+CMakeFiles/target.dir/target.cc.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/target.dir/target.cc.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /users/sjiang/nvmeof-project/src/target.cc > CMakeFiles/target.dir/target.cc.i
 
-CMakeFiles/target.dir/target.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/target.dir/target.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /users/sjiang/nvmeof-project/src/target.cpp -o CMakeFiles/target.dir/target.cpp.s
+CMakeFiles/target.dir/target.cc.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/target.dir/target.cc.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /users/sjiang/nvmeof-project/src/target.cc -o CMakeFiles/target.dir/target.cc.s
 
 # Object files for target target
 target_OBJECTS = \
-"CMakeFiles/target.dir/target.cpp.o"
+"CMakeFiles/target.dir/target.cc.o"
 
 # External object files for target target
 target_EXTERNAL_OBJECTS =
 
-target: CMakeFiles/target.dir/target.cpp.o
+target: CMakeFiles/target.dir/target.cc.o
 target: CMakeFiles/target.dir/build.make
+target: /users/sjiang/.local/lib/libgrpc++_reflection.a
+target: /users/sjiang/.local/lib/libgrpc++.a
+target: /users/sjiang/.local/lib/libprotobuf.a
+target: libgrpc_proto.a
+target: /users/sjiang/.local/lib/libgrpc++_reflection.a
+target: /users/sjiang/.local/lib/libgrpc++.a
+target: /users/sjiang/.local/lib/libgrpc.a
+target: /users/sjiang/.local/lib/libz.a
+target: /users/sjiang/.local/lib/libcares.a
+target: /users/sjiang/.local/lib/libaddress_sorting.a
+target: /users/sjiang/.local/lib/libre2.a
+target: /users/sjiang/.local/lib/libabsl_raw_hash_set.a
+target: /users/sjiang/.local/lib/libabsl_hashtablez_sampler.a
+target: /users/sjiang/.local/lib/libabsl_hash.a
+target: /users/sjiang/.local/lib/libabsl_city.a
+target: /users/sjiang/.local/lib/libabsl_low_level_hash.a
+target: /users/sjiang/.local/lib/libabsl_statusor.a
+target: /users/sjiang/.local/lib/libabsl_bad_variant_access.a
+target: /users/sjiang/.local/lib/libgpr.a
+target: /users/sjiang/.local/lib/libupb.a
+target: /users/sjiang/.local/lib/libabsl_status.a
+target: /users/sjiang/.local/lib/libabsl_random_distributions.a
+target: /users/sjiang/.local/lib/libabsl_random_seed_sequences.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_pool_urbg.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_randen.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_randen_hwaes.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_randen_hwaes_impl.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_randen_slow.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_platform.a
+target: /users/sjiang/.local/lib/libabsl_random_internal_seed_material.a
+target: /users/sjiang/.local/lib/libabsl_random_seed_gen_exception.a
+target: /users/sjiang/.local/lib/libabsl_cord.a
+target: /users/sjiang/.local/lib/libabsl_bad_optional_access.a
+target: /users/sjiang/.local/lib/libabsl_cordz_info.a
+target: /users/sjiang/.local/lib/libabsl_cord_internal.a
+target: /users/sjiang/.local/lib/libabsl_cordz_functions.a
+target: /users/sjiang/.local/lib/libabsl_exponential_biased.a
+target: /users/sjiang/.local/lib/libabsl_cordz_handle.a
+target: /users/sjiang/.local/lib/libabsl_str_format_internal.a
+target: /users/sjiang/.local/lib/libabsl_synchronization.a
+target: /users/sjiang/.local/lib/libabsl_stacktrace.a
+target: /users/sjiang/.local/lib/libabsl_symbolize.a
+target: /users/sjiang/.local/lib/libabsl_debugging_internal.a
+target: /users/sjiang/.local/lib/libabsl_demangle_internal.a
+target: /users/sjiang/.local/lib/libabsl_graphcycles_internal.a
+target: /users/sjiang/.local/lib/libabsl_malloc_internal.a
+target: /users/sjiang/.local/lib/libabsl_time.a
+target: /users/sjiang/.local/lib/libabsl_strings.a
+target: /users/sjiang/.local/lib/libabsl_throw_delegate.a
+target: /users/sjiang/.local/lib/libabsl_int128.a
+target: /users/sjiang/.local/lib/libabsl_strings_internal.a
+target: /users/sjiang/.local/lib/libabsl_base.a
+target: /users/sjiang/.local/lib/libabsl_spinlock_wait.a
+target: /users/sjiang/.local/lib/libabsl_raw_logging_internal.a
+target: /users/sjiang/.local/lib/libabsl_log_severity.a
+target: /users/sjiang/.local/lib/libabsl_civil_time.a
+target: /users/sjiang/.local/lib/libabsl_time_zone.a
+target: /users/sjiang/.local/lib/libssl.a
+target: /users/sjiang/.local/lib/libcrypto.a
+target: /users/sjiang/.local/lib/libprotobuf.a
 target: CMakeFiles/target.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable target"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/target.dir/link.txt --verbose=$(VERBOSE)

@@ -4,17 +4,24 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/users/sjiang/nvmeof-project/src/initiator.cpp" "/users/sjiang/nvmeof-project/src/build/CMakeFiles/initiator.dir/initiator.cpp.o"
+  "/users/sjiang/nvmeof-project/src/initiator.cc" "/users/sjiang/nvmeof-project/src/build/CMakeFiles/initiator.dir/initiator.cc.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
+# Preprocessor definitions for this target.
+set(CMAKE_TARGET_DEFINITIONS_CXX
+  "CARES_STATICLIB"
+  )
+
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
+  "."
   "../third_party"
   )
 
 # Targets to which this target links.
 set(CMAKE_TARGET_LINKED_INFO_FILES
+  "/users/sjiang/nvmeof-project/src/build/CMakeFiles/grpc_proto.dir/DependInfo.cmake"
   )
 
 # Fortran module output directory.

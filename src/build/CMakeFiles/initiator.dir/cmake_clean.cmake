@@ -1,5 +1,5 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/initiator.dir/initiator.cpp.o"
+  "CMakeFiles/initiator.dir/initiator.cc.o"
   "initiator"
   "initiator.pdb"
 )

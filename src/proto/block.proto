@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package block;
+
+service Block {
+	rpc WriteBlock(BlockRequest) returns (BlockReply) {}
+}
+
+message BlockRequest {
+	int32 size = 1;
+	int32 start_block = 2;
+	bytes data = 3;
+}
+
+message BlockReply {
+}

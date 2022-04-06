@@ -57,27 +57,27 @@ include CMakeFiles/benchmark.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/benchmark.dir/flags.make
 
-CMakeFiles/benchmark.dir/local_read.cpp.o: CMakeFiles/benchmark.dir/flags.make
-CMakeFiles/benchmark.dir/local_read.cpp.o: ../local_read.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/benchmark.dir/local_read.cpp.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/benchmark.dir/local_read.cpp.o -c /users/sjiang/nvmeof-project/src/local_read.cpp
+CMakeFiles/benchmark.dir/local_read.cc.o: CMakeFiles/benchmark.dir/flags.make
+CMakeFiles/benchmark.dir/local_read.cc.o: ../local_read.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/benchmark.dir/local_read.cc.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/benchmark.dir/local_read.cc.o -c /users/sjiang/nvmeof-project/src/local_read.cc
 
-CMakeFiles/benchmark.dir/local_read.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/benchmark.dir/local_read.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /users/sjiang/nvmeof-project/src/local_read.cpp > CMakeFiles/benchmark.dir/local_read.cpp.i
+CMakeFiles/benchmark.dir/local_read.cc.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/benchmark.dir/local_read.cc.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /users/sjiang/nvmeof-project/src/local_read.cc > CMakeFiles/benchmark.dir/local_read.cc.i
 
-CMakeFiles/benchmark.dir/local_read.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/benchmark.dir/local_read.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /users/sjiang/nvmeof-project/src/local_read.cpp -o CMakeFiles/benchmark.dir/local_read.cpp.s
+CMakeFiles/benchmark.dir/local_read.cc.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/benchmark.dir/local_read.cc.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /users/sjiang/nvmeof-project/src/local_read.cc -o CMakeFiles/benchmark.dir/local_read.cc.s
 
 # Object files for target benchmark
 benchmark_OBJECTS = \
-"CMakeFiles/benchmark.dir/local_read.cpp.o"
+"CMakeFiles/benchmark.dir/local_read.cc.o"
 
 # External object files for target benchmark
 benchmark_EXTERNAL_OBJECTS =
 
-benchmark: CMakeFiles/benchmark.dir/local_read.cpp.o
+benchmark: CMakeFiles/benchmark.dir/local_read.cc.o
 benchmark: CMakeFiles/benchmark.dir/build.make
 benchmark: CMakeFiles/benchmark.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable benchmark"

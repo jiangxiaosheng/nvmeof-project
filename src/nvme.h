@@ -1,17 +1,19 @@
+#pragma once
 #include <sys/types.h>
 #include <fcntl.h>
 #include <libnvme.h>
 #include <unistd.h>
 #include <cstring>
+#include <iostream>
 
 struct device_config {
 	__u32 namespace_id;
 	char *name;
 	__le64 number_of_logical_blocks;
 	int logical_block_size;
-} config;
+};
 
-void dump_config() {
+void dump_config(struct device_config &config) {
 	printf("device: %s\n", config.name);
 	printf("namespace id: %d\n", config.namespace_id);
 	printf("number of logical blocks: %lld\n", config.number_of_logical_blocks);
@@ -36,9 +38,14 @@ int open_bdev(char *dev, int flags) {
 	return fd;
 }
 
-int init_device_config() {
+int init_device_config(struct device_config &config) {
 	struct nvme_id_ns ns;
 	int fd, err;
+
+	if (config.name == "") {
+		std::cerr << "must specify device name" << std::endl;
+		return -1;
+	}
 
 	fd = open_bdev(config.name, O_RDONLY);
 
@@ -63,15 +70,10 @@ int init_device_config() {
 	config.number_of_logical_blocks = ns.nsze;
 
 	printf("init ok!\n\n");
-	dump_config();
+	dump_config(config);
 
 ret:
 	close(fd);
 
 	return 0;
 }
-
-struct nvme_data_packet {
-	int start_block;
-	
-};

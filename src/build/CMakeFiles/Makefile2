@@ -53,9 +53,10 @@ CMAKE_BINARY_DIR = /users/sjiang/nvmeof-project/src/build
 # Directory level rules for the build root directory
 
 # The main recursive "all" target.
-all: CMakeFiles/target.dir/all
-all: CMakeFiles/initiator.dir/all
 all: CMakeFiles/benchmark.dir/all
+all: CMakeFiles/initiator.dir/all
+all: CMakeFiles/target.dir/all
+all: CMakeFiles/grpc_proto.dir/all
 
 .PHONY : all
 
@@ -65,65 +66,12 @@ preinstall:
 .PHONY : preinstall
 
 # The main recursive "clean" target.
-clean: CMakeFiles/target.dir/clean
-clean: CMakeFiles/initiator.dir/clean
 clean: CMakeFiles/benchmark.dir/clean
+clean: CMakeFiles/initiator.dir/clean
+clean: CMakeFiles/target.dir/clean
+clean: CMakeFiles/grpc_proto.dir/clean
 
 .PHONY : clean
-
-#=============================================================================
-# Target rules for target CMakeFiles/target.dir
-
-# All Build rule for target.
-CMakeFiles/target.dir/all:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/depend
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=5,6 "Built target target"
-.PHONY : CMakeFiles/target.dir/all
-
-# Build rule for subdir invocation for target.
-CMakeFiles/target.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 2
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/target.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 0
-.PHONY : CMakeFiles/target.dir/rule
-
-# Convenience name for target.
-target: CMakeFiles/target.dir/rule
-
-.PHONY : target
-
-# clean rule for target.
-CMakeFiles/target.dir/clean:
-	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/clean
-.PHONY : CMakeFiles/target.dir/clean
-
-#=============================================================================
-# Target rules for target CMakeFiles/initiator.dir
-
-# All Build rule for target.
-CMakeFiles/initiator.dir/all:
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/depend
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=3,4 "Built target initiator"
-.PHONY : CMakeFiles/initiator.dir/all
-
-# Build rule for subdir invocation for target.
-CMakeFiles/initiator.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 2
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/initiator.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 0
-.PHONY : CMakeFiles/initiator.dir/rule
-
-# Convenience name for target.
-initiator: CMakeFiles/initiator.dir/rule
-
-.PHONY : initiator
-
-# clean rule for target.
-CMakeFiles/initiator.dir/clean:
-	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/clean
-.PHONY : CMakeFiles/initiator.dir/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/benchmark.dir
@@ -151,6 +99,87 @@ benchmark: CMakeFiles/benchmark.dir/rule
 CMakeFiles/benchmark.dir/clean:
 	$(MAKE) -f CMakeFiles/benchmark.dir/build.make CMakeFiles/benchmark.dir/clean
 .PHONY : CMakeFiles/benchmark.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/initiator.dir
+
+# All Build rule for target.
+CMakeFiles/initiator.dir/all: CMakeFiles/grpc_proto.dir/all
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/depend
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=7,8 "Built target initiator"
+.PHONY : CMakeFiles/initiator.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/initiator.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 6
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/initiator.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 0
+.PHONY : CMakeFiles/initiator.dir/rule
+
+# Convenience name for target.
+initiator: CMakeFiles/initiator.dir/rule
+
+.PHONY : initiator
+
+# clean rule for target.
+CMakeFiles/initiator.dir/clean:
+	$(MAKE) -f CMakeFiles/initiator.dir/build.make CMakeFiles/initiator.dir/clean
+.PHONY : CMakeFiles/initiator.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/target.dir
+
+# All Build rule for target.
+CMakeFiles/target.dir/all: CMakeFiles/grpc_proto.dir/all
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/depend
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=9,10 "Built target target"
+.PHONY : CMakeFiles/target.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/target.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 6
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/target.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 0
+.PHONY : CMakeFiles/target.dir/rule
+
+# Convenience name for target.
+target: CMakeFiles/target.dir/rule
+
+.PHONY : target
+
+# clean rule for target.
+CMakeFiles/target.dir/clean:
+	$(MAKE) -f CMakeFiles/target.dir/build.make CMakeFiles/target.dir/clean
+.PHONY : CMakeFiles/target.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/grpc_proto.dir
+
+# All Build rule for target.
+CMakeFiles/grpc_proto.dir/all:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/depend
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/users/sjiang/nvmeof-project/src/build/CMakeFiles --progress-num=3,4,5,6 "Built target grpc_proto"
+.PHONY : CMakeFiles/grpc_proto.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/grpc_proto.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 4
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/grpc_proto.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /users/sjiang/nvmeof-project/src/build/CMakeFiles 0
+.PHONY : CMakeFiles/grpc_proto.dir/rule
+
+# Convenience name for target.
+grpc_proto: CMakeFiles/grpc_proto.dir/rule
+
+.PHONY : grpc_proto
+
+# clean rule for target.
+CMakeFiles/grpc_proto.dir/clean:
+	$(MAKE) -f CMakeFiles/grpc_proto.dir/build.make CMakeFiles/grpc_proto.dir/clean
+.PHONY : CMakeFiles/grpc_proto.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.
