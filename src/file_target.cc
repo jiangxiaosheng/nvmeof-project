@@ -1,14 +1,19 @@
 #include "net.grpc.pb.h"
 #include "net.pb.h"
+#include "grpc/grpc.h"
+#include "grpcpp/server_builder.h"
+#include "grpcpp/security/server_credentials.h"
 
 #include <memory>
 #include <string>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unordered_map>
+#include <chrono>
 
 using namespace std;
 using namespace net;
+using namespace chrono;
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
@@ -19,8 +24,19 @@ using grpc::ServerAsyncResponseWriter;
 
 class GRPCFileServerSync final : public File::Service {
 public:
-	GRPCFileServerSync(string addr, int port) : address(addr), port(port) {
+	GRPCFileServerSync(string addr, int port) : address(addr), port(port) {}
 
+	int run() {
+		std::string server_addr = address + ":" + std::to_string(port);
+
+		ServerBuilder builder;
+		builder.AddListeningPort(server_addr, grpc::InsecureServerCredentials());
+		builder.RegisterService(this);
+		std::unique_ptr<Server> server(builder.BuildAndStart());
+		std::cout << "Server listening on " << server_addr << std::endl;
+  		server->Wait();
+
+		return 0;
 	}
 
 	Status AppendOneFile(ServerContext *ctx, const FileRequest *request, FileReply *reply) {
@@ -60,10 +76,10 @@ private:
 	string address;
 	int port;
 	unordered_map<string, int> fd_map;
+	decltype(system_clock::now()) time_on_writes;
 };
 
 int main(int argc, char **argv) {
-	int fd = open("test.txt", O_CREAT | O_RDWR | O_APPEND);
-	write(fd, "123", 4);
-	close(fd);
+	GRPCFileServerSync server("0.0.0.0", 9876);
+	server.run();
 }

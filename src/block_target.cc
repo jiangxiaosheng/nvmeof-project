@@ -77,7 +77,7 @@ int main(int argc, const char **argv) {
 		std::cerr << "must specify device name" << std::endl;
 		return -1;
 	}
-	// GRPCSyncServer server("0.0.0.0", 9876, argv[1]);
-	GRPCAsyncServer server("0.0.0.0", 9876, argv[1]);
+	GRPCSyncServer server("0.0.0.0", 9876, argv[1]);
+	// GRPCAsyncServer server("0.0.0.0", 9876, argv[1]);
 	server.run();
 }

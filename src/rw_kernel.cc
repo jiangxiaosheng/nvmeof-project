@@ -29,14 +29,16 @@ void test_write_throughput_random(struct device_config &config, int data_size) {
 	struct nvme_io_args args;
 	args.args_size = sizeof(args);
 	args.fd = fd;
+	args.timeout = NVME_DEFAULT_IOCTL_TIMEOUT;
 	args.nsid = config.namespace_id;
 	args.nlb = data_size / config.logical_block_size;
 	if (data_size % config.logical_block_size == 0)
 		args.nlb--;
-	args.data_len = data_size;
+	int actual_size = (args.nlb + 1) * config.logical_block_size;
+	args.data_len = actual_size;
 	args.result = NULL;
 
-	buffer = (char *) malloc(data_size);
+	buffer = (char *) malloc(actual_size);
 
 	for (int i = 0; i < N; i++) {
 		

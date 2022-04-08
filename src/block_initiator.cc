@@ -51,6 +51,7 @@ int main(int argc, const char **argv) {
 	Status status;
 	decltype(system_clock::now()) start_time, end_time, total_time;
 	int start_block = 0;
+	
 	for (int i = 0; i < N; i++) {
 		if (i != 0 && i % 1000 == 0)
 			cout << "write " << i << " times" << std::endl;
@@ -64,6 +65,7 @@ int main(int argc, const char **argv) {
 		start_time = system_clock::now();
 		status = stub->WriteBlock(&context, request, &reply);
 		if (!status.ok()) {
+			cout << "write remote block failed" << endl;
 			cerr << status.error_message() << std::endl;
 			return -1;
 		}
