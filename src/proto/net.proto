@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package net;
+
+service Block {
+	rpc WriteBlock(BlockRequest) returns (BlockReply) {}
+	rpc ReadBlock(BlockRequest) returns (BlockReply) {}
+	rpc GetStat(StatRequest) returns (StatReply) {}
+	rpc ResetStat(StatRequest) returns (StatReply) {}
+}
+
+message BlockRequest {
+	int32 size = 1;
+	int32 start_block = 2;
+	bytes data = 3;
+}
+
+message BlockReply {
+	int32 end_block = 1;
+}
+
+message StatRequest {
+
+}
+
+message StatReply {
+	bytes stat = 1;
+}
+
+service File {
+	rpc AppendOneFile(FileRequest) returns (FileReply) {}
+	rpc GetStat(StatRequest) returns (StatReply) {}
+	rpc ResetStat(StatRequest) returns (StatReply) {}
+}
+
+message FileRequest {
+	bool done = 1;
+	int32 size = 2;
+	bytes filename = 3;
+	bytes data = 4;
+}
+
+message FileReply {
+
+}

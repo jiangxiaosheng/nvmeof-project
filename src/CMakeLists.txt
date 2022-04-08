@@ -29,7 +29,7 @@ else()
 endif()
 
 
-set(proto_name block)
+set(proto_name net)
 # Get proto files
 get_filename_component(proto "proto/${proto_name}.proto" ABSOLUTE)
 get_filename_component(proto_dir "${proto}" DIRECTORY)
@@ -50,7 +50,7 @@ add_custom_command(
     DEPENDS "${proto}"
 )
 
-set(targets "target" "initiator")
+set(targets "block_target" "block_initiator" "file_target" "file_initiator")
 
 # Include generated *.pb.h files
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -74,7 +74,7 @@ endforeach()
 
 include_directories(third_party)
 
-add_executable(benchmark local_read.cc)
+add_executable(benchmark rw_kernel.cc)
 target_link_libraries(benchmark nvme)
 
 # target_link_libraries(initiator ibverbs nvme)
