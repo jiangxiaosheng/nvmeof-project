@@ -609,13 +609,27 @@ public:
 		ServerBuilder builder;
 		builder.AddListeningPort(server_addr, grpc::InsecureServerCredentials());
 		builder.RegisterService(&service);
-		write_block_handler = std::make_unique<RPCHandler<WriteBlockCallData>>(this, &service, builder.AddCompletionQueue());
-		read_block_handler = std::make_unique<RPCHandler<ReadBlockCallData>>(this, &service, builder.AddCompletionQueue());
-		get_stat_handler = std::make_unique<RPCHandler<GetStatCallData>>(this, &service, builder.AddCompletionQueue());
-		reset_stat_handler = std::make_unique<RPCHandler<ResetStatCallData>>(this, &service, builder.AddCompletionQueue());
 
+		auto write_block_cq = builder.AddCompletionQueue();
+		// auto read_block_cq = builder.AddCompletionQueue();
+		// auto get_stat_cq = builder.AddCompletionQueue();
+		// auto reset_stat_cq = builder.AddCompletionQueue();
 		server = builder.BuildAndStart();
-		std::cout << "Server listening on " << server_addr << std::endl;
+		
+		write_block_handler = std::make_unique<RPCHandler<WriteBlockCallData>>(this, &service, write_block_cq.release());
+		// read_block_handler = std::make_unique<RPCHandler<ReadBlockCallData>>(this, &service, builder.AddCompletionQueue().release());
+		// get_stat_handler = std::make_unique<RPCHandler<GetStatCallData>>(this, &service, builder.AddCompletionQueue().release());
+		// reset_stat_handler = std::make_unique<RPCHandler<ResetStatCallData>>(this, &service, builder.AddCompletionQueue().release());
+
+		write_block_handler->exec();
+		// read_block_handler->exec();
+		// get_stat_handler->exec();
+		// reset_stat_handler->exec();
+
+		// std::cout << "ok" << std::endl;
+		
+		// std::cout << "Server listening on " << server_addr << std::endl;
+
 
 		// yield cpu
 		std::promise<void>().get_future().wait();
@@ -650,58 +664,62 @@ private:
 			if (status == CallStatus::CREATE) {
 				status = CallStatus::PROCESS;
 				service->RequestWriteBlock(&ctx, &request, &responder, cq, cq, this);
+				std::cout << this << " request done" << std::endl;
 			} else if (status == CallStatus::PROCESS) {
+				std::cout << "not me?" << std::endl;
 				new WriteBlockCallData(server.get(), service, cq);
 
-				auto total_start = std::chrono::system_clock::now();
-				static struct nvme_io_args args {
-					.result = NULL,
-					.args_size = sizeof(args),
-					.fd = server->blk_fd,
-					.timeout = NVME_DEFAULT_IOCTL_TIMEOUT,
-					.nsid = server->config.namespace_id,
-				};
+				// auto total_start = std::chrono::system_clock::now();
+				// static struct nvme_io_args args {
+				// 	.result = NULL,
+				// 	.args_size = sizeof(args),
+				// 	.fd = server->blk_fd,
+				// 	.timeout = NVME_DEFAULT_IOCTL_TIMEOUT,
+				// 	.nsid = server->config.namespace_id,
+				// };
 
-				args.slba = request.start_block();
-				int actual_len;
+				// args.slba = request.start_block();
+				// int actual_len;
 
-				if (request.size() % server->config.logical_block_size != 0) {
-					args.nlb = request.size() / server->config.logical_block_size;
-				} else {
-					args.nlb = request.size() / server->config.logical_block_size - 1;
-				}
-				actual_len = (args.nlb + 1) * server->config.logical_block_size;
+				// if (request.size() % server->config.logical_block_size != 0) {
+				// 	args.nlb = request.size() / server->config.logical_block_size;
+				// } else {
+				// 	args.nlb = request.size() / server->config.logical_block_size - 1;
+				// }
+				// actual_len = (args.nlb + 1) * server->config.logical_block_size;
 				
-				args.data_len = actual_len;
+				// args.data_len = actual_len;
 
-				auto start = std::chrono::system_clock::now();
-				args.data = new char[actual_len];
+				// auto start = std::chrono::system_clock::now();
+				// args.data = new char[actual_len];
 
-				int buffer_size = actual_len;
-				if (request.data().size() > actual_len)
-					buffer_size = actual_len;
-				memcpy(args.data, request.data().data(), request.data().size());
-				server->time_on_allocation += std::chrono::system_clock::now() - start;
+				// int buffer_size = actual_len;
+				// if (request.data().size() > actual_len)
+				// 	buffer_size = actual_len;
+				// memcpy(args.data, request.data().data(), request.data().size());
+				// server->time_on_allocation += std::chrono::system_clock::now() - start;
 
-				start = std::chrono::system_clock::now();
-				int err = nvme_write(&args);
-				server->time_on_rw += std::chrono::system_clock::now() - start;
-				delete[] (char *) args.data;
+				// start = std::chrono::system_clock::now();
+				// int err = nvme_write(&args);
+				// server->time_on_rw += std::chrono::system_clock::now() - start;
+				// delete[] (char *) args.data;
 
-				server->time_total += std::chrono::system_clock::now() - total_start;
+				// server->time_total += std::chrono::system_clock::now() - total_start;
 
+				// status = CallStatus::FINISH;
+				// if (err < 0) {
+				// 	fprintf(stderr, "submit-io: %s\n", nvme_strerror(errno));
+				// 	responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
+				// 	return;
+				// } else if (err) {
+				// 	nvme_show_status(err);
+				// 	responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
+				// 	return;
+				// }
+
+				// reply.set_end_block(request.start_block() + args.nlb);
+				std::cout << "process done" << std::endl;
 				status = CallStatus::FINISH;
-				if (err < 0) {
-					fprintf(stderr, "submit-io: %s\n", nvme_strerror(errno));
-					responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
-					return;
-				} else if (err) {
-					nvme_show_status(err);
-					responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
-					return;
-				}
-
-				reply.set_end_block(request.start_block() + args.nlb);
 				responder.Finish(reply, Status::OK, this);
 			} else {
 				GPR_ASSERT(status == CallStatus::FINISH);
@@ -727,6 +745,7 @@ private:
 				status = CallStatus::PROCESS;
 				service->RequestWriteBlock(&ctx, &request, &responder, cq, cq, this);
 			} else if (status == CallStatus::PROCESS) {
+				std::cout << "async server start processing..." << std::endl;
 				new WriteBlockCallData(server.get(), service, cq);
 
 				auto total_start = std::chrono::system_clock::now();
@@ -828,34 +847,39 @@ private:
 	template<typename CallData>
 	class RPCHandler {
 	public:
-		RPCHandler(GRPCAsyncServer *server, Block::AsyncService *service, std::unique_ptr<ServerCompletionQueue> cq_) : 
-			service(service), cq(std::move(cq_)), server(server) {
+		RPCHandler(GRPCAsyncServer *server, Block::AsyncService *service, ServerCompletionQueue *cq_) : 
+			service(service), cq(cq_), server(server) {
 			tp = std::make_unique<thread_pool>();
 		}
 
 		void exec() {
 			daemon = std::make_unique<std::thread>([&]() {
-				new CallData(server, service, cq);
+				new CallData(server.get(), service, cq);
 				void *tag;
 				bool ok;
+				auto worker_fn = std::mem_fn(&CallData::proceed);
 				while (true) {
+					std::cout << "start call data" << std::endl;
 					GPR_ASSERT(cq->Next(&tag, &ok));
 					GPR_ASSERT(ok);
-					tp->push_task(static_cast<CallData*>(tag)->proceed);
+					// worker_fn((CallData *) tag);
+					static_cast<CallData*>(tag)->proceed();
+					// tp->push_task(worker_fn, (CallData *) tag);
 				}
 			});
 		}
 
 		
 		void shutdown() {
-			cq->Shutdown();	
-			daemon->join();
+			cq->Shutdown();
+			if (daemon != nullptr)
+				daemon->join();
 		}
 
 	private:
 		Block::AsyncService *service;
 		std::unique_ptr<thread_pool> tp;
-		std::unique_ptr<ServerCompletionQueue> cq;
+		ServerCompletionQueue *cq;
 		std::unique_ptr<std::thread> daemon;
 		std::shared_ptr<GRPCAsyncServer> server;
 	};

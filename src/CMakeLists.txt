@@ -4,6 +4,9 @@ project(nvmeof)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
 set(protobuf_MODULE_COMPATIBLE TRUE)
@@ -74,8 +77,11 @@ endforeach()
 
 include_directories(third_party)
 
-add_executable(benchmark rw_kernel.cc)
-target_link_libraries(benchmark nvme)
+add_executable(block_rw_kernel block_rw_kernel.cc)
+target_link_libraries(block_rw_kernel nvme)
+
+add_executable(file_rw_kernel file_rw_kernel.cc)
+target_link_libraries(file_rw_kernel nvme)
 
 # target_link_libraries(initiator ibverbs nvme)
 

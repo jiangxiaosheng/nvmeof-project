@@ -12,7 +12,7 @@ using namespace grpc;
 using namespace net;
 using namespace chrono;
 
-const int N = 1'000'00;
+const int N = 1'000'0;
 
 long random_start_block(int total_blocks) {
 	static random_device rd;
@@ -44,6 +44,29 @@ int main(int argc, const char **argv) {
 
 	auto channel = CreateChannel(server_addr, InsecureChannelCredentials());
 	auto stub = Block::NewStub(channel);
+
+	// BlockRequest request;
+	// BlockReply reply;
+	// request.set_size(10);
+	// request.set_data("123");
+	// ClientContext ctx;
+	// CompletionQueue cq;
+	// Status status;
+	// unique_ptr<ClientAsyncResponseReader<BlockReply>> rpc(stub->PrepareAsyncWriteBlock(&ctx, request, &cq));
+	// rpc->StartCall();
+	// rpc->Finish(&reply, &status, (void *)1);
+	// void *got_tag;
+	// bool ok = false;
+
+	// GPR_ASSERT(cq.Next(&got_tag, &ok));
+	// GPR_ASSERT(got_tag == (void*)1);
+	// GPR_ASSERT(ok);
+
+	// if (status.ok()) {
+    //   cout << reply.end_block() << endl;
+    // } else {
+    //   cout << "RPC failed" << endl;
+    // }
 
 	char *buffer = new char[data_size];
 	BlockRequest request;

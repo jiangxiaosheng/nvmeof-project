@@ -24,7 +24,7 @@ void test_write_throughput_random(struct device_config &config, int data_size) {
 	int fd, err;
 	char *buffer;
 
-	fd = open_bdev(config.name, O_WRONLY | O_DIRECT);
+	fd = open_bdev(config.name, O_RDWR | O_DIRECT);
 
 	struct nvme_io_args args;
 	args.args_size = sizeof(args);
