@@ -28,7 +28,7 @@ message StatReply {
 }
 
 service File {
-	rpc AppendOneFile(FileRequest) returns (FileReply) {}
+	rpc AppendOneFile(stream FileRequest) returns (FileReply) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
 }

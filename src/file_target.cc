@@ -26,6 +26,7 @@ using grpc::Status;
 using grpc::StatusCode;
 using grpc::ServerCompletionQueue;
 using grpc::ServerAsyncResponseWriter;
+using grpc::ServerReader;
 
 class GRPCFileServerSync final : public File::Service {
 public:
@@ -45,12 +46,14 @@ public:
 		return 0;
 	}
 
-	Status AppendOneFile(ServerContext *ctx, const FileRequest *request, FileReply *reply) {
+	Status AppendOneFile(ServerContext *ctx, ServerReader<FileRequest>* reader, FileReply *reply) {
+		FileRequest request;
+		reader->Read(&request);
 		int fd;
-		bool done = request->done();
+		bool done = request.done();
 		int err;
-		int size = request->size();
-		fs::path full_path = fs::path(mnt_point) / fs::path(request->filename());
+		int size = request.size();
+		fs::path full_path = fs::path(mnt_point) / fs::path(request.filename());
 		
 		string filename = full_path.string();
 		if (fd_map[filename]) {
@@ -76,15 +79,18 @@ public:
 		}
 
 		int align = blksize - 1;
-		char *buffer = new char[blksize + align];
-		buffer = (char *) (((uintptr_t) buffer + align) &~ ((uintptr_t) align));
-		memcpy(buffer, request->data().data(), request->data().size());
+		do {
+			char *buffer = new char[blksize + align];
+			buffer = (char *) (((uintptr_t) buffer + align) &~ ((uintptr_t) align));
+			memcpy(buffer, request.data().data(), request.data().size());
+			
+			err = write(fd, buffer, blksize);
+			if (err < 0) {
+				std::cerr << "write data to file " << filename << " failed: " << strerror(errno) << std::endl;
+				return Status(StatusCode::UNKNOWN, "write data failed");
+			}
+		} while (reader->Read(&request));
 		
-		err = write(fd, buffer, blksize);
-		if (err < 0) {
-			std::cerr << "write data to file " << filename << " failed: " << strerror(errno) << std::endl;
-			return Status(StatusCode::UNKNOWN, "write data failed");
-		}
 		return Status::OK;
 	}
 

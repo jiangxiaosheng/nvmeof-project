@@ -22,7 +22,10 @@ int main(int argc, char **argv) {
 	string server_addr = addr + ":" + to_string(port);
 	auto channel = CreateChannel(server_addr, InsecureChannelCredentials());
 	auto stub = File::NewStub(channel);
-	Status status;
+
+	ClientContext context;
+	FileReply reply;
+	auto writer = stub->AppendOneFile(&context, &reply);
 
 	int N = 1000;
 
@@ -30,24 +33,29 @@ int main(int argc, char **argv) {
 
 	decltype(system_clock::now()) start_time, end_time, total_time;
 
+	start_time = system_clock::now();
 	for (int i = 0; i < N; i++) {
-		ClientContext context;
 		FileRequest request;
-		FileReply reply;
 		
 		request.set_filename("large_file");
 		request.set_data(buffer);
 		request.set_size(4096);
 
-		start_time = system_clock::now();
-		status = stub->AppendOneFile(&context, request, &reply);
-		if (!status.ok()) {
-			cout << "write remote file failed" << endl;
-			cerr << status.error_message() << endl;
-			return -1;
+		
+		if (!writer->Write(request)) {
+			cerr << "write file data failed" << endl;
+			break;
 		}
-		total_time += system_clock::now() - start_time;
 	}
+	writer->WritesDone();
+	Status status = writer->Finish();
+	if (!status.ok()) {
+		cout << "write remote file failed" << endl;
+		cerr << status.error_message() << endl;
+		return -1;
+	}
+	
+	total_time += system_clock::now() - start_time;
 
 	printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(total_time.time_since_epoch()).count());
 	printf("total data written is %u bytes\n", N * 4096);
