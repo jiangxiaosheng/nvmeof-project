@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
 	FileReply reply;
 	auto writer = stub->AppendOneFile(&context, &reply);
 
-	int N = 1000;
+	int N = 100000;
 
 	char *buffer = new char[4096];
 
@@ -61,6 +61,12 @@ int main(int argc, char **argv) {
 	printf("total data written is %u bytes\n", N * 4096);
 	printf("throughput for appending (%d bytes) is %f Mb/s\n", 4096, (N * 4096) * 1.0 / 1024 / 1024 / 
 		chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);
-	printf("IOPS for appending (%d bytes) is %f\n", 4096, N * 1.0 / chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);	
+	printf("IOPS for appending (%d bytes) is %f\n", 4096, N * 1.0 / chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);
 
+	StatRequest stat_request;
+	StatReply stat_reply;
+	ClientContext stat_context;
+	stub->GetStat(&stat_context, stat_request, &stat_reply);
+	cout << "latency breakdown in the target side:" << endl;
+	cout << stat_reply.stat() << endl;
 }

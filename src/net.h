@@ -650,7 +650,7 @@ private:
 		ServerCompletionQueue *cq;
 		ServerContext ctx;
 		CallStatus status;
-		std::shared_ptr<GRPCAsyncServer> server;
+		GRPCAsyncServer *server;
 	};
 
 	class WriteBlockCallData : public CallData {
@@ -664,64 +664,14 @@ private:
 			if (status == CallStatus::CREATE) {
 				status = CallStatus::PROCESS;
 				service->RequestWriteBlock(&ctx, &request, &responder, cq, cq, this);
-				std::cout << this << " request done" << std::endl;
 			} else if (status == CallStatus::PROCESS) {
-				std::cout << "not me?" << std::endl;
-				new WriteBlockCallData(server.get(), service, cq);
+				new WriteBlockCallData(server, service, cq);
 
-				// auto total_start = std::chrono::system_clock::now();
-				// static struct nvme_io_args args {
-				// 	.result = NULL,
-				// 	.args_size = sizeof(args),
-				// 	.fd = server->blk_fd,
-				// 	.timeout = NVME_DEFAULT_IOCTL_TIMEOUT,
-				// 	.nsid = server->config.namespace_id,
-				// };
-
-				// args.slba = request.start_block();
-				// int actual_len;
-
-				// if (request.size() % server->config.logical_block_size != 0) {
-				// 	args.nlb = request.size() / server->config.logical_block_size;
-				// } else {
-				// 	args.nlb = request.size() / server->config.logical_block_size - 1;
-				// }
-				// actual_len = (args.nlb + 1) * server->config.logical_block_size;
-				
-				// args.data_len = actual_len;
-
-				// auto start = std::chrono::system_clock::now();
-				// args.data = new char[actual_len];
-
-				// int buffer_size = actual_len;
-				// if (request.data().size() > actual_len)
-				// 	buffer_size = actual_len;
-				// memcpy(args.data, request.data().data(), request.data().size());
-				// server->time_on_allocation += std::chrono::system_clock::now() - start;
-
-				// start = std::chrono::system_clock::now();
-				// int err = nvme_write(&args);
-				// server->time_on_rw += std::chrono::system_clock::now() - start;
-				// delete[] (char *) args.data;
-
-				// server->time_total += std::chrono::system_clock::now() - total_start;
-
-				// status = CallStatus::FINISH;
-				// if (err < 0) {
-				// 	fprintf(stderr, "submit-io: %s\n", nvme_strerror(errno));
-				// 	responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
-				// 	return;
-				// } else if (err) {
-				// 	nvme_show_status(err);
-				// 	responder.Finish(reply, Status(StatusCode::UNKNOWN, "nvme write error"), this);
-				// 	return;
-				// }
-
-				// reply.set_end_block(request.start_block() + args.nlb);
-				std::cout << "process done" << std::endl;
 				status = CallStatus::FINISH;
+				reply.set_end_block(114514);
 				responder.Finish(reply, Status::OK, this);
 			} else {
+				std::cout << "delete " << this << std::endl;
 				GPR_ASSERT(status == CallStatus::FINISH);
 				delete this;
 			}
@@ -746,7 +696,7 @@ private:
 				service->RequestWriteBlock(&ctx, &request, &responder, cq, cq, this);
 			} else if (status == CallStatus::PROCESS) {
 				std::cout << "async server start processing..." << std::endl;
-				new WriteBlockCallData(server.get(), service, cq);
+				new WriteBlockCallData(server, service, cq);
 
 				auto total_start = std::chrono::system_clock::now();
 				static struct nvme_io_args args {
@@ -854,12 +804,11 @@ private:
 
 		void exec() {
 			daemon = std::make_unique<std::thread>([&]() {
-				new CallData(server.get(), service, cq);
+				new CallData(server, service, cq);
 				void *tag;
 				bool ok;
 				auto worker_fn = std::mem_fn(&CallData::proceed);
 				while (true) {
-					std::cout << "start call data" << std::endl;
 					GPR_ASSERT(cq->Next(&tag, &ok));
 					GPR_ASSERT(ok);
 					// worker_fn((CallData *) tag);
@@ -881,7 +830,7 @@ private:
 		std::unique_ptr<thread_pool> tp;
 		ServerCompletionQueue *cq;
 		std::unique_ptr<std::thread> daemon;
-		std::shared_ptr<GRPCAsyncServer> server;
+		GRPCAsyncServer *server;
 	};
 
 	Block::AsyncService service;

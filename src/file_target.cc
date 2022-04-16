@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iostream>
 #include <cstring>
+#include <sstream>
 
 using namespace std;
 using namespace net;
@@ -47,6 +48,8 @@ public:
 	}
 
 	Status AppendOneFile(ServerContext *ctx, ServerReader<FileRequest>* reader, FileReply *reply) {
+		auto total_start = chrono::system_clock::now();
+
 		FileRequest request;
 		reader->Read(&request);
 		int fd;
@@ -79,18 +82,36 @@ public:
 		}
 
 		int align = blksize - 1;
+		decltype(chrono::system_clock::now()) rw_start, allocation_start;
 		do {
+			allocation_start = chrono::system_clock::now();
 			char *buffer = new char[blksize + align];
 			buffer = (char *) (((uintptr_t) buffer + align) &~ ((uintptr_t) align));
 			memcpy(buffer, request.data().data(), request.data().size());
+			time_on_allocation += chrono::system_clock::now() - allocation_start;
 			
+			rw_start = chrono::system_clock::now();
 			err = write(fd, buffer, blksize);
+			time_on_rw += chrono::system_clock::now() - rw_start;
 			if (err < 0) {
 				std::cerr << "write data to file " << filename << " failed: " << strerror(errno) << std::endl;
 				return Status(StatusCode::UNKNOWN, "write data failed");
 			}
 		} while (reader->Read(&request));
 		
+		time_total += std::chrono::system_clock::now() - total_start;
+		return Status::OK;
+	}
+
+	Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
+		std::stringstream ss;
+		ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
+			<< " ms\n" << "time on writes is " 
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_rw.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
+			<< " ms\n";
+		reply->set_stat(ss.str());
 		return Status::OK;
 	}
 
@@ -99,7 +120,7 @@ private:
 	int port;
 	string mnt_point;
 	unordered_map<string, int> fd_map;
-	decltype(system_clock::now()) time_on_writes;
+	decltype(std::chrono::system_clock::now()) time_on_allocation, time_on_rw, time_total;
 	int blksize;
 };
 
