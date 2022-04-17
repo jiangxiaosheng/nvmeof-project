@@ -14,13 +14,17 @@ int main(int argc, char **argv) {
 	char *buffer = new char[blksize + align];
 	buffer = (char *) (((uintptr_t) buffer + align) &~ ((uintptr_t) align));
 
-	int N = 20000;
+	int N = 10000;
 
 	decltype(system_clock::now()) start_time, end_time, total_time;
 
 	// ================ append one large file ====================
 	string file = "/mnt/nvmeof-largefile";
 	int fd = open(file.data(), O_RDWR | O_CREAT | O_APPEND | O_DIRECT, 0600);
+	if (fd < 0) {
+		perror("open filed failed");
+		return -1;
+	}
 
 	start_time = system_clock::now();
 	for (int i = 0; i < N; i++) {
@@ -39,5 +43,10 @@ int main(int argc, char **argv) {
 
 
 	// =================== append many small files ======================
-	
+	// start_time = system_clock::now();
+	// total_time = {};
+	// for (int i = 0; i < N; i++) {
+
+	// }
+
 }

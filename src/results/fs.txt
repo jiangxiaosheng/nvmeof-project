@@ -1,3 +1,7 @@
+tested on cloudlab m510
+
+================================ grpc and nvme-local ==============================
+
 # append remote large file ASYNC, block size = 4kb
 # flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT
 
@@ -128,3 +132,27 @@ time on allocation is 133 ms
 time on writes is 870 ms
 time on open files is 111 ms
 total time on server is 1617 ms
+
+
+
+
+
+======================================= nvmeof ===================================
+
+# append remote large file SYNC, block size = 4kb
+# flags: O_RDWR | O_CREAT | O_APPEND | O_DIRECT | O_SYNC
+
+total time for appending is 65895 milliseconds
+total data written is 40960000 bytes
+throughput for appending (4096 bytes) is 0.592796 Mb/s
+IOPS for appending (4096 bytes) is 151.755753
+
+
+# append remote large file SYNC, block size = 4kb
+# flags: O_RDWR | O_CREAT | O_APPEND | O_DIRECT
+# Note: file system can be sometimes corrupted. why?
+
+total time for appending is 2544 milliseconds
+total data written is 40960000 bytes
+throughput for appending (4096 bytes) is 15.350828 Mb/s
+IOPS for appending (4096 bytes) is 3929.811986
