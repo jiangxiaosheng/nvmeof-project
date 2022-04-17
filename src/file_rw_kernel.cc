@@ -9,16 +9,18 @@ using namespace std;
 using namespace chrono;
 
 int main(int argc, char **argv) {
-	string file = "/mnt/nvmeof-largefile";
-	int fd = open(file.data(), O_RDWR | O_CREAT | O_APPEND | O_DIRECT | O_SYNC, 0600);
 	int blksize = 4096;
 	int align = blksize - 1;
 	char *buffer = new char[blksize + align];
 	buffer = (char *) (((uintptr_t) buffer + align) &~ ((uintptr_t) align));
 
-	int N = 10000;
+	int N = 20000;
 
 	decltype(system_clock::now()) start_time, end_time, total_time;
+
+	// ================ append one large file ====================
+	string file = "/mnt/nvmeof-largefile";
+	int fd = open(file.data(), O_RDWR | O_CREAT | O_APPEND | O_DIRECT, 0600);
 
 	start_time = system_clock::now();
 	for (int i = 0; i < N; i++) {
@@ -35,4 +37,7 @@ int main(int argc, char **argv) {
 		chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);
 	printf("IOPS for appending (%d bytes) is %f\n", 4096, N * 1.0 / chrono::duration_cast<chrono::microseconds>(total_time.time_since_epoch()).count() * 1e6);	
 
+
+	// =================== append many small files ======================
+	
 }

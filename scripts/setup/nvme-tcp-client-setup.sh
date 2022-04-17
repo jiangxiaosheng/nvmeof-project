@@ -17,6 +17,6 @@ TARGET_IP_ADDR=10.10.1.1
 
 # discover the remote nvme target and connect to it
 sudo nvme discover -t tcp -a $TARGET_IP_ADDR -s 4420
-sudo nvme connect -t tcp -n nvmet-test -a $TARGET_IP_ADDR -s 4420
+sudo nvme connect -t tcp -n nvmet-tcp -a $TARGET_IP_ADDR -s 4420
 
 echo "nvme-tcp client setup ok"
