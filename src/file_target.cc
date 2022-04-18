@@ -117,7 +117,7 @@ public:
 			std::string filename = full_path.string();
 			
 			open_start = chrono::system_clock::now();
-			int fd = open(filename.data(), O_APPEND | O_DIRECT | O_RDWR | O_CREAT | O_SYNC, 0644);
+			int fd = open(filename.data(), O_APPEND | O_DIRECT | O_RDWR | O_CREAT, 0644);
 			time_on_open += chrono::system_clock::now() - open_start;
 			if (fd < 0) {
 				perror(("open file " + filename + " failed").data());
