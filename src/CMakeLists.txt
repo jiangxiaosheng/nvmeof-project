@@ -81,7 +81,7 @@ add_executable(block_rw_kernel block_rw_kernel.cc)
 target_link_libraries(block_rw_kernel nvme)
 
 add_executable(file_rw_kernel file_rw_kernel.cc)
-target_link_libraries(file_rw_kernel nvme)
+target_link_libraries(file_rw_kernel nvme uring pthread)
 
 # target_link_libraries(initiator ibverbs nvme)
 
