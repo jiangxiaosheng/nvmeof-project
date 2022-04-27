@@ -4,7 +4,7 @@ package net;
 
 service Block {
 	rpc WriteBlock(BlockRequest) returns (BlockReply) {}
-	rpc ReadBlock(BlockRequest) returns (BlockReply) {}
+	rpc ReadBlock(BlockRequest) returns (stream BlockReply) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
 }
@@ -28,19 +28,29 @@ message StatReply {
 }
 
 service File {
-	rpc AppendOneLargeFile(stream FileRequest) returns (FileReply) {}
-	rpc AppendManySmallFiles(stream FileRequest) returns (FileReply) {}
+	rpc AppendOneLargeFile(stream FileRequest) returns (stream FileReply) {}
+	rpc AppendManySmallFiles(stream FileRequest) returns (stream FileReply) {}
+	rpc SetParameters(Parameters) returns (ACK) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
 }
 
 message FileRequest {
-	bool done = 1;
-	int32 size = 2;
 	bytes filename = 3;
 	bytes data = 4;
 }
 
 message FileReply {
+
+}
+
+message Parameters {
+	int32 N = 1;
+	int32 blk_size = 2;
+	int32 queue_depth = 3;
+	int32 poll_threshold = 4;
+}
+
+message ACK {
 
 }

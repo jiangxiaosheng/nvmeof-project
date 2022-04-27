@@ -1,160 +1,26 @@
-# see google sheet: https://docs.google.com/spreadsheets/d/1xY5AWhAm8fLWM-Ww1bHvUYRhza6TBzk4jdD1wFDF4-A/edit#gid=0
+============== small files =====================
 
-tested on cloudlab m510
+[4KB]
+open loop: 160 MB/s, 41012 IOPS
+closed loop: 29 MB/s, 7426 IOPS
 
-================================ grpc and nvme-local ==============================
+[512KB]
+open loop: 1055 MB/s, 2110 IOPS
+closed loop: 355 MB/s, 710 IOPS
 
-# append remote large file ASYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT
+[1MB]
+open loop: 1008 MB/s, 1008 IOPS
+closed loop: 405 MB/s, 405 IOPS
 
-append remote one large file
-total time for appending is 956 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 81.668430 Mb/s
-IOPS for appending (4096 bytes) is 20907.118037
-latency breakdown in the target side:
-time on allocation is 97 ms
-time on writes is 854 ms
-time on open files is 0 ms
-total time on server is 955 ms
+[4MB]
+open loop: 1071 MB/s, 267 IOPS
+closed loop: 634 MB/s, 158 IOPS
 
-# append remote large file SYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT
-
-append remote one large file
-total time for appending is 1452 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 53.791093 Mb/s
-IOPS for appending (4096 bytes) is 13770.519796
-latency breakdown in the target side:
-time on allocation is 138 ms
-time on writes is 829 ms
-time on open files is 0 ms
-total time on server is 1451 ms
-
-# append remote large file ASYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT | O_SYNC
-
-append remote one large file
-total time for appending is 105675 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 0.739290 Mb/s
-IOPS for appending (4096 bytes) is 189.258315
-latency breakdown in the target side:
-time on allocation is 108 ms
-time on writes is 105337 ms
-time on open files is 0 ms
-total time on server is 105673 ms
-
-# append remote large file SYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT | O_SYNC
-
-append remote one large file
-total time for appending is 108860 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 0.717661 Mb/s
-IOPS for appending (4096 bytes) is 183.721130
-latency breakdown in the target side:
-time on allocation is 469 ms
-time on writes is 106992 ms
-time on open files is 0 ms
-total time on server is 108858 ms
-
-
-# append remote many small files SYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT | O_SYNC
-
-append remote many small files
-total time for appending is 109905 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 0.710838 Mb/s
-IOPS for appending (4096 bytes) is 181.974536
-latency breakdown in the target side:
-time on allocation is 457 ms
-time on writes is 106314 ms
-time on open files is 1548 ms
-total time on server is 109903 ms
-
-
-# append remote many small files ASYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT | O_SYNC
-
-append remote many small files
-total time for appending is 13367 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 5.844440 Mb/s
-IOPS for appending (4096 bytes) is 1496.176596
-latency breakdown in the target side:
-time on allocation is 107 ms
-time on writes is 213559 ms
-time on open files is 232 ms
-total time on server is 13365 ms
-
-
-# append remote many small files ASYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT
-
-append remote many small files
-total time for appending is 1147 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 68.095666 Mb/s
-IOPS for appending (4096 bytes) is 17432.490501
-latency breakdown in the target side:
-time on allocation is 132 ms
-time on writes is 1582 ms
-time on open files is 548 ms
-total time on server is 1146 ms
-
-
-# append remote many small files SYNC, block size = 4kb
-# flags: O_APPEND | O_DIRECT | O_RDWR | O_CREAT
-
-# files initially do not exist
-
-append remote many small files
-total time for appending is 2108 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 37.055922 Mb/s
-IOPS for appending (4096 bytes) is 9486.315989
-latency breakdown in the target side:
-time on allocation is 165 ms
-time on writes is 1010 ms
-time on open files is 387 ms
-total time on server is 2106 ms
-
-# files are already created
-
-append remote many small files
-total time for appending is 1618 milliseconds
-total data written is 81920000 bytes
-throughput for appending (4096 bytes) is 48.260640 Mb/s
-IOPS for appending (4096 bytes) is 12354.723890
-latency breakdown in the target side:
-time on allocation is 133 ms
-time on writes is 870 ms
-time on open files is 111 ms
-total time on server is 1617 ms
+[16MB]
+open loop: 1050 MB/s, 66 IOPS
+closed loop: 733 MB/s, 45 IOPS
 
 
 
+============== large file =======================
 
-
-======================================= nvmeof ===================================
-
-# append remote large file SYNC, block size = 4kb
-# flags: O_RDWR | O_CREAT | O_APPEND | O_DIRECT | O_SYNC
-
-total time for appending is 65895 milliseconds
-total data written is 40960000 bytes
-throughput for appending (4096 bytes) is 0.592796 Mb/s
-IOPS for appending (4096 bytes) is 151.755753
-
-
-# append remote large file SYNC, block size = 4kb
-# flags: O_RDWR | O_CREAT | O_APPEND | O_DIRECT
-# Note: file system can be sometimes corrupted. why?
-
-total time for appending is 2544 milliseconds
-total data written is 40960000 bytes
-throughput for appending (4096 bytes) is 15.350828 Mb/s
-IOPS for appending (4096 bytes) is 3929.811986

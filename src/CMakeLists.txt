@@ -77,11 +77,11 @@ endforeach()
 
 include_directories(third_party)
 
-add_executable(block_rw_kernel block_rw_kernel.cc)
-target_link_libraries(block_rw_kernel nvme)
+add_executable(block_rw_nvmeof block_rw_nvmeof.cc)
+target_link_libraries(block_rw_nvmeof nvme)
 
-add_executable(file_rw_kernel file_rw_kernel.cc)
-target_link_libraries(file_rw_kernel nvme uring pthread)
+add_executable(file_rw_nvmeof file_rw_nvmeof.cc)
+target_link_libraries(file_rw_nvmeof nvme uring pthread)
 
 # target_link_libraries(initiator ibverbs nvme)
 
