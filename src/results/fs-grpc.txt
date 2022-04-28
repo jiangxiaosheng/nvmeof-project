@@ -1,0 +1,24 @@
+============== small files =====================
+
+
+============== large file =====================
+
+[4KB]
+open loop:
+closed loop: 7.22 MB/s, 1848 IOPS
+
+[64KB]
+open loop:
+closed loop:
+
+[512KB]
+open loop:
+closed loop:
+
+[1MB]
+open loop:
+closed loop:
+
+[4MB]
+open loop:
+closed loop:

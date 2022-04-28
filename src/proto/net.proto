@@ -36,8 +36,8 @@ service File {
 }
 
 message FileRequest {
-	bytes filename = 3;
-	bytes data = 4;
+	bytes filename = 1;
+	bytes data = 2;
 }
 
 message FileReply {
@@ -45,8 +45,8 @@ message FileReply {
 }
 
 message Parameters {
-	int32 N = 1;
-	int32 blk_size = 2;
+	int32 blk_size = 1;
+	int32 buffer_size = 2;
 	int32 queue_depth = 3;
 	int32 poll_threshold = 4;
 }

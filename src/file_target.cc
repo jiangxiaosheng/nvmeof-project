@@ -48,6 +48,21 @@ public:
 		return 0;
 	}
 
+	Status SetParameters(ServerContext *ctx, const Parameters *params, ACK *ack) {
+		buffer_size = params->buffer_size();
+		queue_depth = params->queue_depth();
+		poll_threshold = params->poll_threshold();
+		blk_size = params->blk_size();
+
+		cout << "set params:\n" 
+			<< "  buffer_size = " << buffer_size << "B\n"
+			<< "  block_size = " << blk_size << "B\n"
+			<< "  queue_depth = " << queue_depth << "\n"
+			<< "  poll_threshold = " << poll_threshold << "\n"
+			<< endl;
+		return Status::OK;
+	}
+
 	Status AppendOneLargeFile(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
 		auto total_start = chrono::system_clock::now();
 
@@ -57,16 +72,15 @@ public:
 
 		int err;
 
-		string filename = request.filename();
-		int fd = open(filename.data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
 		decltype(chrono::system_clock::now()) rw_start, allocation_start;
 		do {
 			allocation_start = chrono::system_clock::now();
 			void *buffer;
-			err = posix_memalign(&buffer, buffer_size, buffer_size);
+			err = posix_memalign(&buffer, blk_size, buffer_size);
 			if (err) {
-				perror("posix_memalign");
+				fprintf(stderr, "Error posix_memalign: %s\n", strerror(-err));
 				return Status(StatusCode::UNKNOWN, "posix_memalign failed");
 			}
 			memcpy(buffer, request.data().data(), buffer_size);
@@ -76,7 +90,7 @@ public:
 			err = write(fd, buffer, buffer_size);
 			time_on_rw += chrono::system_clock::now() - rw_start;
 			if (err < 0) {
-				std::cerr << "write data to file " << filename << " failed: " << strerror(errno) << std::endl;
+				perror("write");
 				return Status(StatusCode::UNKNOWN, "write data failed");
 			}
 
@@ -84,6 +98,8 @@ public:
 		} while (stream->Read(&request));
 		
 		time_total += std::chrono::system_clock::now() - total_start;
+		cout << std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count() << endl;
+		close(fd);
 		return Status::OK;
 	}
 
@@ -124,32 +140,35 @@ public:
 	// 	return Status::OK;
 	// }
 
-	// Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
-	// 	std::stringstream ss;
-	// 	ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
-	// 		<< " ms\n" << "time on writes is " 
-	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_rw.time_since_epoch()).count()
-	// 		<< " ms\n" << "time on open files is "
-	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open.time_since_epoch()).count()
-	// 		<< " ms\n" << "total time on server is "
-	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
-	// 		<< " ms\n";
-	// 	reply->set_stat(ss.str());
-	// 	return Status::OK;
-	// }
+	Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
+		std::stringstream ss;
+		ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
+			<< " ms\n" << "time on writes is " 
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_rw.time_since_epoch()).count()
+			<< " ms\n" << "time on open files is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
+			<< " ms\n";
+		cout << ss.str();
+		reply->set_stat(ss.str());
+		return Status::OK;
+	}
 
-	// Status ResetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
-	// 	time_on_allocation = time_on_rw = time_total = time_on_open = {};
-	// 	return Status::OK;
-	// }
+	Status ResetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
+		time_on_allocation = time_on_rw = time_total = time_on_open = {};
+		return Status::OK;
+	}
 
 private:
 	string address;
 	int port;
 
 	int queue_depth;
+	int poll_threshold;
 	decltype(std::chrono::system_clock::now()) time_on_allocation, time_on_rw, time_total, time_on_open;
 	int buffer_size;
+	int blk_size;
 };
 
 // class GRPCFileServerAsync final : public File::Service {
@@ -286,19 +305,19 @@ private:
 // 		return Status::OK;
 // 	}
 
-// 	Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
-// 		std::stringstream ss;
-// 		ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
-// 			<< " ms\n" << "time on writes is " 
-// 			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_rw.time_since_epoch()).count()
-// 			<< " ms\n" << "time on open files is "
-// 			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open.time_since_epoch()).count()
-// 			<< " ms\n" << "total time on server is "
-// 			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
-// 			<< " ms\n";
-// 		reply->set_stat(ss.str());
-// 		return Status::OK;
-// 	}
+	// Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
+	// 	std::stringstream ss;
+	// 	ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
+	// 		<< " ms\n" << "time on writes is " 
+	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_rw.time_since_epoch()).count()
+	// 		<< " ms\n" << "time on open files is "
+	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open.time_since_epoch()).count()
+	// 		<< " ms\n" << "total time on server is "
+	// 		<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total.time_since_epoch()).count()
+	// 		<< " ms\n";
+	// 	reply->set_stat(ss.str());
+	// 	return Status::OK;
+	// }
 
 // 	Status ResetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
 // 		time_on_allocation = time_on_rw = time_total = time_on_open = {};
@@ -316,7 +335,7 @@ private:
 // };
 
 int main(int argc, char **argv) {
-	// GRPCFileServerSync server("0.0.0.0", 9876, "/mnt", 4096);
+	GRPCFileServerSync server("0.0.0.0", 9876);
 	// GRPCFileServerAsync server("0.0.0.0", 9876, "/mnt", 4096);
-	// server.run();
+	server.run();
 }
