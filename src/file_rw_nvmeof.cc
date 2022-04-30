@@ -61,7 +61,7 @@ void test_large_io_uring_poll() {
 		perror("posix_memalign");
 		return;
 	}
-	memset(buff, 0, buffer_size);
+	memset(buff, -1, buffer_size);
 
 	// ================ start a thread to poll cqe ===================
 	thread cq_thread([](struct io_uring *ring) {
@@ -96,7 +96,7 @@ void test_large_io_uring_poll() {
 		}
 	
 		io_uring_prep_write(sqe, 0, buff, buffer_size, 0);
-		sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_LINK;
+		sqe->flags |= IOSQE_FIXED_FILE;
 		io_uring_submit(&ring);
 	}
 
@@ -142,7 +142,7 @@ void test_large_io_uring() {
 		perror("posix_memalign");
 		return;
 	}
-	memset(buff, 0, buffer_size);
+	memset(buff, -1, buffer_size);
 
 	// ================ start a thread to poll cqe ===================
 	thread cq_thread([](struct io_uring *ring) {
@@ -170,7 +170,6 @@ void test_large_io_uring() {
 			return;
 		}
 		io_uring_prep_write(sqe, fd, buff, buffer_size, 0);
-		sqe->flags |= IOSQE_IO_LINK;
 		io_uring_submit(&ring);
 	}
 
@@ -209,7 +208,7 @@ void test_small_io_uring() {
 		perror("posix_memalign");
 		return;
 	}
-	memset(buff, 0, buffer_size);
+	memset(buff, -1, buffer_size);
 
 	// ================ start a thread to poll cqe ===================
 	thread cq_thread([](struct io_uring *ring) {
@@ -280,7 +279,7 @@ void test_large_blocking() {
 		perror("posix_memalign");
 		return;
 	}
-	memset(buff, 0, buffer_size);
+	memset(buff, -1, buffer_size);
 
 	auto start = system_clock::now();
 	for (int i = 0; i < N; i++) {
@@ -310,7 +309,7 @@ void test_small_blocking() {
 		perror("posix_memalign");
 		return;
 	}
-	memset(buff, 0, buffer_size);
+	memset(buff, -1, buffer_size);
 
 	auto start = system_clock::now();
 	for (int i = 0; i < N; i++) {

@@ -70,7 +70,7 @@ target_link_libraries(grpc_proto
 
 foreach(_target ${targets})
     add_executable(${_target} "${_target}.cc")
-    target_link_libraries(${_target} PRIVATE ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF} grpc_proto ibverbs nvme)
+    target_link_libraries(${_target} PRIVATE ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF} grpc_proto ibverbs nvme uring)
     # Cannot do this because these directories are not available during CMake "compile time"
     # target_include_directories(${proto_hdrs} ${grpc_hdrs})
 endforeach()

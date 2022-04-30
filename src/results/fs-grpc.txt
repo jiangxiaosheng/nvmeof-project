@@ -1,24 +1,45 @@
 ============== small files =====================
 
+[4KB]
+open loop: 61 MB/s, 15796 IOPS
+closed loop: 9 MB/s, 2274 IOPS
+
+[64KB]
+open loop: 430 MB/s, 6880 IOPS
+closed loop: 88 MB/s, 1418 IOPS
+
+[512KB]
+open loop: 821 MB/s, 1667 IOPS
+closed loop: 259 MB/s, 505 IOPS
+
+[1MB]
+open loop: 863 MB/s, 863 IOPS
+closed loop: 286 MB/s, 286 IOPS
+
+[4MB]
+open loop: 890 MB/s, 222 IOPS
+closed loop: 302 MB/s, 75 IOPS
+
+
 
 ============== large file =====================
 
 [4KB]
-open loop:
-closed loop: 7.22 MB/s, 1848 IOPS
+open loop: 57 MB/s, 14373 IOPS
+closed loop: 10 MB/s, 2812 IOPS
 
 [64KB]
-open loop:
-closed loop:
+open loop: 500 MB/s, 8013 IOPS
+closed loop: 86 MB/s, 1327 IOPS
 
 [512KB]
-open loop:
-closed loop:
+open loop: 800 MB/s, 1600 IOPS
+closed loop: 241 MB/s, 483 IOPS
 
 [1MB]
-open loop:
-closed loop:
+open loop: 863 MB/s, 863 IOPS
+closed loop: 290 MB/s, 290 IOPS
 
 [4MB]
 open loop:
-closed loop:
+closed loop: 302 MB/s, 75 IOPS

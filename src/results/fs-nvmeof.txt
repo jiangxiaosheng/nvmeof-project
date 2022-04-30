@@ -4,12 +4,16 @@
 open loop: 160 MB/s, 41012 IOPS
 closed loop: 29 MB/s, 7426 IOPS
 
+[64KB]
+open loop: 957 MB/s, 15325 IOPS
+closed loop: 176 MB/s, 2831 IOPS
+
 [512KB]
 open loop: 1055 MB/s, 2110 IOPS
 closed loop: 355 MB/s, 710 IOPS
 
 [1MB]
-open loop: 1008 MB/s, 1008 IOPS
+open loop: 888 MB/s, 888 IOPS
 closed loop: 405 MB/s, 405 IOPS
 
 [4MB]
@@ -37,10 +41,10 @@ open loop: 232 MB/s, 464 IOPS
 closed loop: 389 MB/s, 778 IOPS
 
 [1MB]
-open loop: 224 MB/s, 226 IOPS
-closed loop:
+open loop: 224 MB/s, 224 IOPS
+closed loop: 279 MB/s, 279 IOPS
 
 [4MB]
-open loop:
-closed loop:
+open loop: 460 MB/s, 115 IOPS
+closed loop: 613 MB/s, 153 IOPS
 
