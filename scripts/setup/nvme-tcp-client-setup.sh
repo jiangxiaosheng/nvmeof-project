@@ -13,7 +13,7 @@ sudo apt update & sudo apt install nvme-cli libaio-dev -y
 nvme gen-hostnqn | sudo tee /etc/nvme/hostnqn > /dev/null
 
 # ip address of the nvme target machine
-TARGET_IP_ADDR=10.10.1.1
+TARGET_IP_ADDR=10.10.1.2
 
 # discover the remote nvme target and connect to it
 sudo nvme discover -t tcp -a $TARGET_IP_ADDR -s 4420

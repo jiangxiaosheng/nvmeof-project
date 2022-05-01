@@ -17,7 +17,7 @@ sudo meson install -C .build
 # install grpc
 export MY_INSTALL_DIR=$HOME/.local
 mkdir -p $MY_INSTALL_DIR
-echo 'export PATH="${MY_INSTALL_DIR}/bin:$PATH"' | tee -a ~/.bashrc
+echo 'export PATH="~/.local/bin:$PATH"' | tee -a ~/.bashrc
 source ~/.bashrc
 git clone --recurse-submodules -b v1.45.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc ~/grpc
 cd ~/grpc
@@ -29,5 +29,12 @@ cmake -DgRPC_INSTALL=ON \
       ../..
 make -j8
 make install
+popd
+
+git clone https://github.com/axboe/liburing.git ~/liburing
+pushd ~/liburing
+./configure
+make -j8
+sudo make install
 popd
 
