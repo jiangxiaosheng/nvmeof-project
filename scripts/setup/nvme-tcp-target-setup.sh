@@ -36,7 +36,7 @@ sudo mkdir /sys/kernel/config/nvmet/ports/1
 cd /sys/kernel/config/nvmet/ports/1
 
 # ip address of the target which is connected to clients
-IP_ADDR=10.10.1.1
+IP_ADDR=10.10.1.2
 echo $IP_ADDR | sudo tee -a addr_traddr > /dev/null
 echo tcp | sudo tee -a addr_trtype > /dev/null
 echo 4420 | sudo tee -a addr_trsvcid > /dev/null
