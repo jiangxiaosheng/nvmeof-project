@@ -246,7 +246,7 @@ public:
 
     int fds[fn];
     for (int i = 0; i < fn; i++) {
-      string name = "/mnt/large-file-" + to_string(i);
+      string name = "/mnt/large-file-" + to_string(dummy++) + "-" + to_string(i);
       fds[i] = open(name.data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
       if (fds[i] < 0) {
         perror("open failed");
@@ -283,7 +283,6 @@ public:
     for (int i = 0; i < fn; i++) {
       close(fds[i]);
     }
-
 
     time_total += std::chrono::system_clock::now() - total_start;
 
@@ -396,6 +395,7 @@ private:
 
   // for experiment
   int fn;
+  atomic_int dummy = 0;
 };
 
 int main(int argc, char **argv) {

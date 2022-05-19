@@ -1,0 +1,18 @@
+[4KB]
+----- n_files = 16
+grpc: 285 MB/s
+nvmeof: 500 MB/s
+
+----- n_files = 32
+grpc: 307 MB/s
+nvmeof: 790 MB/s
+
+
+[64KB]
+----- n_files = 16
+grpc: 1250 MB/s
+nvmeof: 2255 MB/s
+
+----- n_files = 32
+grpc: 1334 MB/s
+nvmeof: 2350 MB/s
