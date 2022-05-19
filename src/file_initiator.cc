@@ -23,6 +23,8 @@ bool large;
 bool poll;
 bool closed_loop;
 bool test_read;
+bool exprm;
+int fn;
 
 void check_target_stats(std::unique_ptr<File::Stub> &stub) {
 	StatRequest stat_request;
@@ -173,7 +175,61 @@ void test_large_async() {
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 
 	check_target_stats(stub);
-	delete[] buffer; 
+	delete[] buffer;
+}
+
+void test_large_async_expr() {
+  auto stub = move(build_rpc_stub());
+	Parameters params;
+	params.set_buffer_size(buffer_size);
+	params.set_blk_size(blk_size);
+  params.set_queue_depth(queue_depth);
+  params.set_poll_threshold(idle_threshold);
+  params.set_n(N);
+  params.set_nfiles(fn);
+
+  {
+    ClientContext params_context;
+    ACK ack;
+    Status status = stub->SetParameters(&params_context, params, &ack);
+    if (!status.ok()) {
+      cerr << "SetParameters rpc failed" << endl;
+      return;
+    }
+  }
+
+	ClientContext stream_context;
+	std::shared_ptr<ClientReaderWriter<FileRequest, FileReply>> stream(stub->AppendOneLargeFileAsyncExpr(&stream_context));
+
+	FileReply reply;
+
+	char *buffer = new char[buffer_size];
+	memset(buffer, -1, buffer_size);
+
+  FileRequest request;
+	request.set_data(buffer);
+
+  auto start = system_clock::now();
+	for (int i = 0; i < N; i++) {
+		stream->Write(request);
+	}
+  stream->WritesDone();
+  stream->Read(&reply);
+  Status status = stream->Finish();
+  if (!status.ok()) {
+    cerr << "AppendOneLargeFile rpc failed" << endl;
+    return;
+  }
+
+	auto duration = system_clock::now() - start;
+	printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
+  printf("total data written is %lu bytes\n", N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 /
+  	chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+
+	check_target_stats(stub);
+	delete[] buffer;
 }
 
 void test_small_async() {
@@ -228,7 +284,9 @@ void parse_args(int argc, char **argv) {
 	program.add_argument("-r").help("test reading, default is writing").default_value(false).implicit_value(true);
 	program.add_argument("-addr").help("the ip address of the target").default_value(string("10.10.1.2"));
 	program.add_argument("-port").help("the port of the target").default_value(9876).scan<'i', int>();
-	program.parse_args(argc, argv);
+  program.add_argument("-exp").help("do experiment to help understand results").default_value(false).implicit_value(true);
+  program.add_argument("-fn").help("number of large files").default_value(1).scan<'i', int>();	
+  program.parse_args(argc, argv);
 
 	queue_depth = program.get<int>("-d");
 	buffer_size = program.get<int>("-b");
@@ -241,10 +299,18 @@ void parse_args(int argc, char **argv) {
 	test_read = program.get<bool>("-r");
 	server_addr = program.get<string>("-addr");
 	server_port = program.get<int>("-port");
+  exprm = program.get<bool>("-exp");
+  fn = program.get<int>("-fn");
 }
 
 int main(int argc, char **argv) {
 	parse_args(argc, argv);
+
+  if (exprm) {
+    cout << "append to many large files (async)\n" << endl;
+    test_large_async_expr();
+    return 0;
+  }
 
 	if (closed_loop) {
 		if (large) {

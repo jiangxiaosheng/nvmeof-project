@@ -32,6 +32,7 @@ service File {
 	rpc AppendManySmallFiles(stream FileRequest) returns (stream FileReply) {}
 	rpc AppendOneLargeFileAsync(stream FileRequest) returns (stream FileReply) {}
 	rpc AppendManySmallFilesAsync(stream FileRequest) returns (stream FileReply) {}
+	rpc AppendOneLargeFileAsyncExpr(stream FileRequest) returns (stream FileReply) {}
 	rpc SetParameters(Parameters) returns (ACK) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
@@ -52,6 +53,7 @@ message Parameters {
 	int32 queue_depth = 3;
 	int32 poll_threshold = 4;
 	int32 n = 5;
+	int32 nfiles = 6;
 }
 
 message ACK {

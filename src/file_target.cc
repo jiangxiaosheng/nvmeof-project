@@ -57,6 +57,7 @@ public:
 		poll_threshold = params->poll_threshold();
 		blk_size = params->blk_size();
     N = params->n();
+    fn = params->nfiles();
 
 		cout << "set params:\n" 
 			<< "  buffer_size = " << buffer_size << "B\n"
@@ -188,7 +189,7 @@ public:
     if (fd < 0) {
       perror("open failed");
       return Status(StatusCode::UNKNOWN, "close fd failed");
-    } 
+    }
 
     do {
       auto sqe = io_uring_get_sqe(&ring);
@@ -220,7 +221,75 @@ public:
 
     stream->Write(reply);
     return Status::OK;
-  } 
+  }
+
+  Status AppendOneLargeFileAsyncExpr(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    auto total_start = chrono::system_clock::now();
+    thread cq_thread([=](struct io_uring *ring) {
+      int ret;
+      for (int i = 0; i < N; i++) {
+        struct io_uring_cqe *cqe;
+        ret = io_uring_wait_cqe(ring, &cqe);
+        if (ret < 0) {
+          fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
+          return;
+        }
+        if (cqe->res < 0) {
+          fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
+        }
+        io_uring_cqe_seen(ring, cqe);
+      }
+	  }, &ring);
+
+    FileRequest request;
+    FileReply reply;
+
+    int fds[fn];
+    for (int i = 0; i < fn; i++) {
+      string name = "/mnt/large-file-" + to_string(i);
+      fds[i] = open(name.data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
+      if (fds[i] < 0) {
+        perror("open failed");
+        return Status(StatusCode::UNKNOWN, "close fd failed");
+      }
+    }
+
+    int n = 0;
+    while (stream->Read(&request)) {
+      auto sqe = io_uring_get_sqe(&ring);
+      if (!sqe) {
+			  perror("io_uring_get_sqe");
+        return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
+		  }
+
+      auto allocation_start = chrono::system_clock::now();
+      void *buffer;
+			if (posix_memalign(&buffer, blk_size, buffer_size)) {
+        perror("posix_memalign");
+        return Status(StatusCode::UNKNOWN, "posix_memalign failed");
+      }
+			memcpy(buffer, request.data().data(), buffer_size);
+			time_on_allocation += chrono::system_clock::now() - allocation_start;
+
+      io_uring_prep_write(sqe, fds[n++ % fn], buffer, buffer_size, 0);
+
+      io_uring_submit(&ring);
+    }
+
+    cq_thread.join();
+
+    io_uring_queue_exit(&ring);
+    
+    for (int i = 0; i < fn; i++) {
+      close(fds[i]);
+    }
+
+
+    time_total += std::chrono::system_clock::now() - total_start;
+
+    stream->Write(reply);
+    return Status::OK;
+  }
   
 
   Status AppendManySmallFilesAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
@@ -324,10 +393,12 @@ private:
   // io_uring
   struct io_uring ring;
   struct io_uring_params uring_params;
+
+  // for experiment
+  int fn;
 };
 
 int main(int argc, char **argv) {
 	GRPCFileServerSync server("0.0.0.0", 9876);
-	// GRPCFileServerAsync server("0.0.0.0", 9876, "/mnt", 4096);
 	server.run();
 }

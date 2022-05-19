@@ -7,6 +7,7 @@
 #include <liburing.h>
 #include <sys/utsname.h>
 #include <thread>
+#include <libaio.h>
 
 #include "third_party/argparse.hpp"
 
@@ -22,6 +23,9 @@ bool large;
 bool poll;
 bool closed_loop;
 bool test_read;
+bool aio;
+bool exprm;
+int fn;
 
 void test_large_io_uring_poll() {
   // =============== setup io_uring context =================
@@ -339,6 +343,211 @@ void test_small_blocking() {
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 }
 
+void test_small_aio() {
+  int ret;
+  io_context_t io_ctx = nullptr;
+
+  ret = io_setup(10, &io_ctx);
+  if (ret) {
+    cout << ret << endl;
+    perror("io_setup");
+    return;
+  }
+
+  void *buff;
+	ret = posix_memalign(&buff, blk_size, buffer_size);
+	if (ret) {
+		perror("posix_memalign");
+		return;
+	}
+	memset(buff, -1, buffer_size);
+
+  thread cq_thread([&](){
+    int max_nr = queue_depth;
+    int min_nr = max_nr / 2;
+    int cnt = 0;
+    struct timespec timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_nsec = 10'000'000; // 10ms
+    struct io_event events[max_nr];
+    while (cnt < N) {
+      int n = io_getevents(io_ctx, min_nr, max_nr, events, &timeout);
+      for (int i = 0; i < n; i++) {
+        close(events[i].obj->aio_fildes);
+        delete events[i].obj;
+      }
+      cnt += n;
+    }
+  });
+
+  auto start = system_clock::now();
+  struct iocb **iocbs = new struct iocb*[queue_depth];
+  int cnt = 0;
+  while (cnt < N) {
+    int n = 0;
+    for (; n < queue_depth && cnt < N; n++, cnt++) {
+      string name = "/mnt/small-file-" + to_string(cnt);
+      int fd = open(name.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+      if (fd < 0) {
+        perror("open");
+        return;
+      }
+      iocbs[n] = new iocb;
+      io_prep_pwrite(iocbs[n], fd, (void *)buff, buffer_size, 0);
+    }
+    ret = io_submit(io_ctx, n, iocbs);
+  }
+
+  cq_thread.join();
+  io_destroy(io_ctx);
+
+	auto duration = system_clock::now() - start;
+	printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
+  printf("total data written is %lu bytes\n", N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 /
+  	chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+}
+
+void test_large_aio() {
+  int ret;
+  io_context_t io_ctx = nullptr;
+
+  ret = io_setup(10, &io_ctx);
+  if (ret) {
+    cout << ret << endl;
+    perror("io_setup");
+    return;
+  }
+
+  void *buff;
+	ret = posix_memalign(&buff, blk_size, buffer_size);
+	if (ret) {
+		perror("posix_memalign");
+		return;
+	}
+	memset(buff, -1, buffer_size);
+
+  thread cq_thread([&](){
+    int max_nr = queue_depth;
+    int min_nr = max_nr / 2;
+    int cnt = 0;
+    struct timespec timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_nsec = 10'000'000; // 10ms
+    struct io_event events[max_nr];
+    while (cnt < N) {
+      int n = io_getevents(io_ctx, min_nr, max_nr, events, &timeout);
+      for (int i = 0; i < n; i++) {
+        delete events[i].obj;
+      }
+      cnt += n;
+    }
+  });
+
+  string name = "/mnt/large-file";
+  int fd = open(name.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+  if (fd < 0) {
+    perror("open");
+    return;
+  }
+
+  auto start = system_clock::now();
+  struct iocb **iocbs = new struct iocb*[queue_depth];
+  int cnt = 0;
+  while (cnt < N) {
+    int n = 0;
+    for (; n < queue_depth && cnt < N; n++, cnt++) {
+      iocbs[n] = new iocb;
+      io_prep_pwrite(iocbs[n], fd, (void *)buff, buffer_size, 0);
+    }
+    ret = io_submit(io_ctx, n, iocbs);
+  }
+
+  cq_thread.join();
+  io_destroy(io_ctx);
+  close(fd);
+
+	auto duration = system_clock::now() - start;
+	printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
+  printf("total data written is %lu bytes\n", N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 /
+  	chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+}
+
+void test_io_uring_exp_contention() {
+	int ret;
+
+  struct io_uring ring;
+  struct io_uring_params params;
+
+  memset(&params, 0, sizeof(params));
+
+	ret = io_uring_queue_init_params(queue_depth, &ring, &params);
+	if (ret) {
+			fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+			return;
+	}
+
+	void *buff;
+	ret = posix_memalign(&buff, blk_size, buffer_size);
+	if (ret) {
+		perror("posix_memalign");
+		return;
+	}
+	memset(buff, -1, buffer_size);
+
+	thread cq_thread([](struct io_uring *ring) {
+		int ret;
+		for (int i = 0; i < N; i++) {
+			struct io_uring_cqe *cqe;
+			ret = io_uring_wait_cqe(ring, &cqe);
+			if (ret < 0) {
+				fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
+				return;
+			}
+			if (cqe->res < 0) {
+				fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
+			}
+			io_uring_cqe_seen(ring, cqe);
+		}
+	}, &ring);
+
+  int n_files = fn;
+  int fds[n_files];
+  for (int i = 0; i < n_files; i++) {
+    string name = "/mnt/large-file-" + to_string(i);
+    fds[i] = open(name.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+    if (fds[i] < 0) {
+      perror("open");
+      return;
+    }
+  }
+
+	auto start = system_clock::now();
+	for (int i = 0; i < N; i++) {
+		auto sqe = io_uring_get_sqe(&ring);
+		while (!sqe) {
+			sqe = io_uring_get_sqe(&ring);
+		}
+		io_uring_prep_write(sqe, fds[i % n_files], buff, buffer_size, 0);
+		io_uring_submit(&ring);
+	}
+	
+	cq_thread.join();
+
+	auto duration = system_clock::now() - start;
+	printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
+  printf("total data written is %lu bytes\n", N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 /
+  	chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+
+	io_uring_queue_exit(&ring);
+
+}
+
 void parse_args(int argc, char **argv) {
 	argparse::ArgumentParser program;
 	program.add_argument("-d").help("io_uring queue depth").default_value(128).scan<'i', int>();
@@ -350,7 +559,10 @@ void parse_args(int argc, char **argv) {
 	program.add_argument("-p").help("use io_uring poll mode").default_value(false).implicit_value(true);
 	program.add_argument("-c").help("test with closed loop (normal blocking read/write syscall rather than io_uring)").default_value(false).implicit_value(true);
 	program.add_argument("-r").help("test reading, default is writing").default_value(false).implicit_value(true);
-	program.parse_args(argc, argv);
+	program.add_argument("-a").help("use libaio instead of io_uring").default_value(false).implicit_value(true);
+  program.add_argument("-exp").help("do experiment to help understand results").default_value(false).implicit_value(true);
+  program.add_argument("-fn").help("number of large files").default_value(1).scan<'i', int>();
+  program.parse_args(argc, argv);
 
 	queue_depth = program.get<int>("-d");
 	buffer_size = program.get<int>("-b");
@@ -361,10 +573,18 @@ void parse_args(int argc, char **argv) {
 	poll = program.get<bool>("-p");
 	closed_loop = program.get<bool>("-c");
 	test_read = program.get<bool>("-r");
+  aio = program.get<bool>("-a");
+  exprm = program.get<bool>("-exp");
+  fn = program.get<int>("-fn");
 }
 
 int main(int argc, char **argv) {
 	parse_args(argc, argv);
+
+  if (exprm) {
+    test_io_uring_exp_contention();
+    return 0;
+  }
 
 	if (closed_loop) {
 		if (large) {
@@ -376,20 +596,30 @@ int main(int argc, char **argv) {
 		}
 	} else {
 		if (large) {
-			if (poll) {
-				cout << "append to one large file (async), io_uring poll mode\n" << endl;
-				test_large_io_uring_poll();
-			} else {
-				cout << "append to one large file (async)\n" << endl;
-				test_large_io_uring();
-			}
+      if (aio) {
+        cout << "append to one large file (async, libaio)\n" << endl;
+        test_large_aio();
+      } else {
+        if (poll) {
+          cout << "append to one large file (async), io_uring poll mode\n" << endl;
+          test_large_io_uring_poll();
+        } else {
+          cout << "append to one large file (async)\n" << endl;
+          test_large_io_uring();
+        }
+      }
 		} else {
-			if (poll) {
-				cerr << "not implemented" << endl;
-			} else {
-				cout << "append to " << N << " small files (async)\n" << endl;
-				test_small_io_uring();
-			}
+      if (aio) {
+        cout << "append to " << N << " small files (async, libaio)\n" << endl;
+        test_small_aio();
+      } else {
+        if (poll) {
+          cerr << "not implemented" << endl;
+        } else {
+          cout << "append to " << N << " small files (async)\n" << endl;
+          test_small_io_uring();
+        }
+      }
 		}
 	}
 

@@ -2,7 +2,7 @@
 
 # install required packages
 sudo apt update
-sudo apt install -y cmake meson uuid-dev build-essential autoconf libtool pkg-config
+sudo apt install -y cmake meson uuid-dev build-essential autoconf libtool pkg-config libaio-dev
 sudo apt install -y infiniband-diags ibutils ibverbs-utils rdmacm-utils perftest \
   rdma-core mstflint libibverbs-dev librdmacm-dev libmlx5-1
 

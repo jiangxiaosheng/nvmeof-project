@@ -1,15 +1,18 @@
 ============== small files =====================
 
 [4KB]
-open loop: 329 MB/s, 84469 IOPS
+open loop (io_uring): 267 MB/s, 68471 IOPS
+open loop (libaio): 54 MB/s, 14065 IOPS
 closed loop: 61 MB/s, 15605 IOPS
 
 [64KB]
-open loop: 1820 MB/s, 29131 IOPS
+open loop (io_uring): 1820 MB/s, 29131 IOPS
+open loop (libaio): 324 MB/s, 5185 IOPS
 closed loop: 354 MB/s, 5675 IOPS
 
 [512KB]
-open loop: 2250 MB/s, 4501 IOPS
+open loop (io_uring): 2250 MB/s, 4501 IOPS
+open loop (libaio): 881 MB/s, 1762 IOPS
 closed loop: 901 MB/s, 1802 IOPS
 
 [1MB]
@@ -25,15 +28,18 @@ closed loop: 1304 MB/s, 326 IOPS
 ============== large file =======================
 
 [4KB]
-open loop: 34 MB/s, 8810 IOPS
+open loop (io_uring): 34 MB/s, 8810 IOPS
+open loop (libaio): 64 MB/s, 16458 IOPS
 closed loop: 72 MB/s, 18600 IOPS
 
 [64KB]
-open loop: 237 MB/s, 3796 IOPS
+open loop (io_uring): 237 MB/s, 3796 IOPS
+open loop (libaio): 385 MB/s, 6170 IOPS
 closed loop: 396 MB/s, 6343 IOPS
 
 [512KB]
-open loop: 644 MB/s, 1288 IOPS
+open loop (io_uring): 644 MB/s, 1288 IOPS
+open loop (libaio): 886 MB/s, 1772 IOPS
 closed loop: 903 MB/s, 1807 IOPS
 
 [1MB]
