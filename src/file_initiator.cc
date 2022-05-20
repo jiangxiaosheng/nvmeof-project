@@ -287,9 +287,9 @@ void test_large_async_multithreads() {
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
-  printf("total data written is %lu bytes\n", N * buffer_size);
-  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
-  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("total data written is %lu bytes\n", numcpus * N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (numcpus * N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, numcpus * N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 }
 
 void test_small_async_multithreads() {

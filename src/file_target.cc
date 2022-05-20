@@ -66,13 +66,6 @@ public:
 			<< "  poll_threshold = " << poll_threshold << "\n"
 			<< endl;
 
-    memset(&uring_params, 0, sizeof(uring_params));
-
-    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
-    if (ret) {
-        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
-        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
-    }
 		return Status::OK;
 	}
 
@@ -164,6 +157,16 @@ public:
 	}
 
   Status AppendOneLargeFileAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    struct io_uring ring;
+    struct io_uring_params uring_params;
+    memset(&uring_params, 0, sizeof(uring_params));
+
+    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
+    if (ret) {
+        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+    }
+
     auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
@@ -224,6 +227,16 @@ public:
   }
 
   Status AppendOneLargeFileAsyncExpr(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    struct io_uring ring;
+    struct io_uring_params uring_params;
+    memset(&uring_params, 0, sizeof(uring_params));
+
+    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
+    if (ret) {
+        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+    }
+
     auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
@@ -245,8 +258,9 @@ public:
     FileReply reply;
 
     int fds[fn];
+    int nonce = dummy++;
     for (int i = 0; i < fn; i++) {
-      string name = "/mnt/large-file-" + to_string(dummy++) + "-" + to_string(i);
+      string name = "/mnt/large-file-" + to_string(nonce) + "-" + to_string(i);
       fds[i] = open(name.data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
       if (fds[i] < 0) {
         perror("open failed");
@@ -292,6 +306,16 @@ public:
   
 
   Status AppendManySmallFilesAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    struct io_uring ring;
+    struct io_uring_params uring_params;
+    memset(&uring_params, 0, sizeof(uring_params));
+
+    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
+    if (ret) {
+        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+    }
+    
     auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
@@ -388,10 +412,6 @@ private:
 	size_t buffer_size;
 	int blk_size;
   int N;
-
-  // io_uring
-  struct io_uring ring;
-  struct io_uring_params uring_params;
 
   // for experiment
   int fn;
