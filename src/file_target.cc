@@ -70,9 +70,7 @@ public:
 	}
 
 	Status AppendOneLargeFile(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
-		auto total_start = chrono::system_clock::now();
-
-		FileRequest request;
+    FileRequest request;
 		FileReply reply;
 		stream->Read(&request);
 
@@ -105,7 +103,6 @@ public:
 			stream->Write(reply);
 		} while (stream->Read(&request));
 		
-		time_total += std::chrono::system_clock::now() - total_start;
 		close(fd);
 		return Status::OK;
 	}
@@ -157,6 +154,9 @@ public:
 	}
 
   Status AppendOneLargeFileAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring;
+    auto total_start = system_clock::now();
+
     struct io_uring ring;
     struct io_uring_params uring_params;
     memset(&uring_params, 0, sizeof(uring_params));
@@ -167,9 +167,9 @@ public:
         return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
     }
 
-    auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
+      void *data;
       for (int i = 0; i < N; i++) {
         struct io_uring_cqe *cqe;
         ret = io_uring_wait_cqe(ring, &cqe);
@@ -180,6 +180,8 @@ public:
         if (cqe->res < 0) {
           fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
         }
+        data = io_uring_cqe_get_data(cqe);
+        free(data);
         io_uring_cqe_seen(ring, cqe);
       }
 	  }, &ring);
@@ -201,16 +203,17 @@ public:
         return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
 		  }
 
-      auto allocation_start = chrono::system_clock::now();
+      auto copy_start = chrono::system_clock::now();
       void *buffer;
 			if (posix_memalign(&buffer, blk_size, buffer_size)) {
         perror("posix_memalign");
         return Status(StatusCode::UNKNOWN, "posix_memalign failed");
       }
 			memcpy(buffer, request.data().data(), buffer_size);
-			time_on_allocation += chrono::system_clock::now() - allocation_start;
+			time_on_copy_uring += chrono::system_clock::now() - copy_start;
 
       io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
+      io_uring_sqe_set_data(sqe, buffer);
 
       io_uring_submit(&ring);
     } while (stream->Read(&request));
@@ -220,13 +223,22 @@ public:
     io_uring_queue_exit(&ring);
     close(fd);
 
-    time_total += std::chrono::system_clock::now() - total_start;
+    time_total_uring += std::chrono::system_clock::now() - total_start;
 
+    std::stringstream ss;
+		ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
+			<< " ms\n";
+    reply.set_stats(ss.str());
     stream->Write(reply);
     return Status::OK;
   }
 
   Status AppendOneLargeFileAsyncExpr(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring;
+    auto total_start = system_clock::now();
+
     struct io_uring ring;
     struct io_uring_params uring_params;
     memset(&uring_params, 0, sizeof(uring_params));
@@ -237,9 +249,9 @@ public:
         return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
     }
 
-    auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
+      void *data;
       for (int i = 0; i < N; i++) {
         struct io_uring_cqe *cqe;
         ret = io_uring_wait_cqe(ring, &cqe);
@@ -250,6 +262,8 @@ public:
         if (cqe->res < 0) {
           fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
         }
+        data = io_uring_cqe_get_data(cqe);
+        free(data);
         io_uring_cqe_seen(ring, cqe);
       }
 	  }, &ring);
@@ -276,17 +290,17 @@ public:
         return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
 		  }
 
-      auto allocation_start = chrono::system_clock::now();
+      auto copy_start = chrono::system_clock::now();
       void *buffer;
 			if (posix_memalign(&buffer, blk_size, buffer_size)) {
         perror("posix_memalign");
         return Status(StatusCode::UNKNOWN, "posix_memalign failed");
       }
 			memcpy(buffer, request.data().data(), buffer_size);
-			time_on_allocation += chrono::system_clock::now() - allocation_start;
+			time_on_copy_uring += chrono::system_clock::now() - copy_start;
 
       io_uring_prep_write(sqe, fds[n++ % fn], buffer, buffer_size, 0);
-
+      io_uring_sqe_set_data(sqe, buffer);
       io_uring_submit(&ring);
     }
 
@@ -298,14 +312,23 @@ public:
       close(fds[i]);
     }
 
-    time_total += std::chrono::system_clock::now() - total_start;
+    time_total_uring += std::chrono::system_clock::now() - total_start;
 
+    std::stringstream ss;
+		ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
+			<< " ms\n";
+    reply.set_stats(ss.str());
     stream->Write(reply);
     return Status::OK;
   }
   
 
   Status AppendManySmallFilesAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring, time_on_open_uring;
+    auto total_start = system_clock::now();
+
     struct io_uring ring;
     struct io_uring_params uring_params;
     memset(&uring_params, 0, sizeof(uring_params));
@@ -316,9 +339,9 @@ public:
         return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
     }
     
-    auto total_start = chrono::system_clock::now();
     thread cq_thread([=](struct io_uring *ring) {
       int ret;
+      void *data;
       for (int i = 0; i < 2*N; i++) {
         struct io_uring_cqe *cqe;
         ret = io_uring_wait_cqe(ring, &cqe);
@@ -329,6 +352,10 @@ public:
         if (cqe->res < 0) {
           fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
         }
+        data = io_uring_cqe_get_data(cqe);
+        if (data != nullptr) {
+          free(data);
+        }
         io_uring_cqe_seen(ring, cqe);
       }
 	  }, &ring);
@@ -338,27 +365,30 @@ public:
     stream->Read(&request);
 
     do {
+      auto open_start = system_clock::now();
       int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
       if (fd < 0) {
         perror("open failed");
         return Status(StatusCode::UNKNOWN, "close fd failed");
-      } 
+      }
+      time_on_open_uring += system_clock::now() - open_start;
 
       auto sqe = io_uring_get_sqe(&ring);
       while (!sqe) {
 			  sqe = io_uring_get_sqe(&ring);
 		  }
 
-      auto allocation_start = chrono::system_clock::now();
+      auto copy_start = chrono::system_clock::now();
       void *buffer;
 			if (posix_memalign(&buffer, blk_size, buffer_size)) {
         perror("posix_memalign");
         return Status(StatusCode::UNKNOWN, "posix_memalign failed");
       }
 			memcpy(buffer, request.data().data(), buffer_size);
-			time_on_allocation += chrono::system_clock::now() - allocation_start;
+			time_on_copy_uring += chrono::system_clock::now() - copy_start;
 
       io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
+      io_uring_sqe_set_data(sqe, buffer);
       sqe->flags |= IOSQE_IO_LINK;
 
       sqe = io_uring_get_sqe(&ring);
@@ -375,14 +405,22 @@ public:
 
     io_uring_queue_exit(&ring);
 
-    time_total += std::chrono::system_clock::now() - total_start;
+    time_total_uring += std::chrono::system_clock::now() - total_start;
 
+    std::stringstream ss;
+		ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
+			<< " ms\n" << "time on open files is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open_uring.time_since_epoch()).count()
+			<< " ms\n" << "total time on server is "
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
+			<< " ms\n";
+    reply.set_stats(ss.str());
     stream->Write(reply);
 
     return Status::OK;
   }
 
-	Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
+  Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
 		std::stringstream ss;
 		ss << "time on allocation is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_allocation.time_since_epoch()).count()
 			<< " ms\n" << "time on writes is " 
@@ -408,7 +446,7 @@ private:
 
 	int queue_depth;
 	int poll_threshold;
-	decltype(std::chrono::system_clock::now()) time_on_allocation, time_on_rw, time_total, time_on_open;
+  decltype(std::chrono::system_clock::now()) time_on_allocation, time_on_rw, time_total, time_on_open;
 	size_t buffer_size;
 	int blk_size;
   int N;

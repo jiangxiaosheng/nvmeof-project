@@ -26,15 +26,7 @@ bool closed_loop;
 bool test_read;
 string exprm;
 int fn;
-
-void check_target_stats(std::unique_ptr<File::Stub> &stub) {
-  StatRequest stat_request;
-  StatReply stat_reply;
-  ClientContext stat_context;
-  stub->GetStat(&stat_context, stat_request, &stat_reply);
-  cout << "latency breakdown in the target side:" << endl;
-  cout << stat_reply.stat() << endl;
-}
+int numthreads;
 
 void set_target_params(std::unique_ptr<File::Stub> &stub) {
   Parameters params;
@@ -96,7 +88,6 @@ void test_large_blocking() {
   printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 
-  check_target_stats(stub);
   delete[] buffer;
 }
 
@@ -134,7 +125,44 @@ void test_small_blocking() {
   printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 
-  check_target_stats(stub);
+  delete[] buffer;
+}
+
+void test_small_async() {
+  auto stub = move(build_rpc_stub());
+  set_target_params(stub);
+
+  ClientContext stream_context;
+  std::shared_ptr<ClientReaderWriter<FileRequest, FileReply>> stream(stub->AppendManySmallFilesAsync(&stream_context));
+
+  FileReply reply;
+
+  char *buffer = new char[buffer_size];
+  memset(buffer, -1, buffer_size);
+
+  FileRequest request;
+  request.set_data(buffer);
+
+  auto start = system_clock::now();
+  for (int i = 0; i < N; i++) {
+    request.set_filename("/mnt/small-file" + to_string(i));
+    stream->Write(request);
+  }
+  stream->WritesDone();
+  stream->Read(&reply);
+  Status status = stream->Finish();
+  if (!status.ok()) {
+    cerr << "AppendOneLargeFile rpc failed" << endl;
+    return;
+  }
+  cout << reply.stats();
+
+  auto duration = system_clock::now() - start;
+  printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
+  printf("total data written is %lu bytes\n", N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+
   delete[] buffer;
 }
 
@@ -165,6 +193,7 @@ void test_large_async() {
     cerr << "AppendOneLargeFile rpc failed" << endl;
     return;
   }
+  cout << reply.stats();
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
@@ -172,7 +201,6 @@ void test_large_async() {
   printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 
-  check_target_stats(stub);
   delete[] buffer;
 }
 
@@ -218,6 +246,7 @@ void test_large_async_expr() {
     cerr << "AppendOneLargeFile rpc failed" << endl;
     return;
   }
+  cout << reply.stats() << endl;
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
@@ -225,7 +254,6 @@ void test_large_async_expr() {
   printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
   printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 
-  check_target_stats(stub);
   delete[] buffer;
 }
 
@@ -251,8 +279,8 @@ void test_large_async_multithreads() {
   }
 
   auto start = system_clock::now();
-  std::thread threads[numcpus];
-  for (int i = 0; i < numcpus; i++) {
+  std::thread threads[numthreads];
+  for (int i = 0; i < numthreads; i++) {
     threads[i] = std::thread([&]() {
       ClientContext stream_context;
       std::shared_ptr<ClientReaderWriter<FileRequest, FileReply>> stream(stub->AppendOneLargeFileAsyncExpr(&stream_context));
@@ -276,61 +304,24 @@ void test_large_async_multithreads() {
         cerr << "AppendOneLargeFile rpc failed" << endl;
         return;
       }
+      // cout << reply.stats() << endl;
 
       delete[] buffer;
     });
   }
 
-  for (int i = 0; i < numcpus; i++) {
+  for (int i = 0; i < numthreads; i++) {
     threads[i].join();
   }
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
-  printf("total data written is %lu bytes\n", numcpus * N * buffer_size);
-  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (numcpus * N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
-  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, numcpus * N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("total data written is %lu bytes\n", numthreads * N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (numthreads * N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, numthreads * N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
 }
 
 void test_small_async_multithreads() {
-}
-
-void test_small_async() {
-  auto stub = move(build_rpc_stub());
-  set_target_params(stub);
-
-  ClientContext stream_context;
-  std::shared_ptr<ClientReaderWriter<FileRequest, FileReply>> stream(stub->AppendManySmallFilesAsync(&stream_context));
-
-  FileReply reply;
-
-  char *buffer = new char[buffer_size];
-  memset(buffer, -1, buffer_size);
-
-  FileRequest request;
-  request.set_data(buffer);
-
-  auto start = system_clock::now();
-  for (int i = 0; i < N; i++) {
-    request.set_filename("/mnt/small-file" + to_string(i));
-    stream->Write(request);
-  }
-  stream->WritesDone();
-  stream->Read(&reply);
-  Status status = stream->Finish();
-  if (!status.ok()) {
-    cerr << "AppendOneLargeFile rpc failed" << endl;
-    return;
-  }
-
-  auto duration = system_clock::now() - start;
-  printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
-  printf("total data written is %lu bytes\n", N * buffer_size);
-  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
-  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
-
-  check_target_stats(stub);
-  delete[] buffer;
 }
 
 void parse_args(int argc, char **argv) {
@@ -348,6 +339,7 @@ void parse_args(int argc, char **argv) {
   program.add_argument("-port").help("the port of the target").default_value(9876).scan<'i', int>();
   program.add_argument("-exp").help("do experiment to help understand results (multiple large files [ml], multi-threads [mt])").default_value("");
   program.add_argument("-fn").help("number of large files").default_value(1).scan<'i', int>();
+  program.add_argument("-threads").help("number of threads").default_value(std::thread::hardware_concurrency()).scan<'i', int>();
   program.parse_args(argc, argv);
 
   queue_depth = program.get<int>("-d");
@@ -363,6 +355,7 @@ void parse_args(int argc, char **argv) {
   server_port = program.get<int>("-port");
   exprm = program.get<string>("-exp");
   fn = program.get<int>("-fn");
+  numthreads = program.get<int>("-threads");
 }
 
 int main(int argc, char **argv) {

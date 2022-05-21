@@ -44,7 +44,7 @@ message FileRequest {
 }
 
 message FileReply {
-
+	bytes stats = 1;
 }
 
 message Parameters {

@@ -26,6 +26,7 @@ bool test_read;
 bool aio;
 string exprm;
 int fn;
+int numthreads;
 
 void test_large_io_uring_poll() {
   // =============== setup io_uring context =================
@@ -540,12 +541,10 @@ void test_io_uring_exp_contention() {
   io_uring_queue_exit(&ring);
 }
 
-void test_io_uring_exp_multithreads() {
-  const int numcpus = std::thread::hardware_concurrency();
-
+void test_io_uring_exp_multithreads_large() {
   auto start = system_clock::now();
-  std::thread threads[numcpus];
-  for (int i = 0; i < numcpus; i++) {
+  std::thread threads[numthreads];
+  for (int i = 0; i < numthreads; i++) {
     threads[i] = std::thread([](int nonce) {
       int ret;
 
@@ -609,15 +608,19 @@ void test_io_uring_exp_multithreads() {
     }, i);
   }
 
-  for (int i = 0; i < numcpus; i++) {
+  for (int i = 0; i < numthreads; i++) {
     threads[i].join();
   }
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
-  printf("total data written is %lu bytes\n", numcpus * N * buffer_size);
-  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (numcpus * N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
-  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, numcpus * N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("total data written is %lu bytes\n", numthreads * N * buffer_size);
+  printf("throughput for appending (%ld bytes) is %f MB/s\n", buffer_size, (numthreads * N * buffer_size) * 1.0 / 1024 / 1024 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+  printf("IOPS for appending (%ld bytes) is %f\n", buffer_size, numthreads * N * 1.0 / chrono::duration_cast<chrono::microseconds>(duration).count() * 1e6);
+}
+
+void test_io_uring_exp_multithreads_small() {
+
 }
 
 void parse_args(int argc, char **argv) {
@@ -634,6 +637,7 @@ void parse_args(int argc, char **argv) {
   program.add_argument("-a").help("use libaio instead of io_uring").default_value(false).implicit_value(true);
   program.add_argument("-exp").help("do experiment to help understand results (multiple large files [ml], multi-threads [mt])").default_value("");
   program.add_argument("-fn").help("number of large files").default_value(1).scan<'i', int>();
+  program.add_argument("-threads").help("number of threads").default_value(std::thread::hardware_concurrency()).scan<'i', int>();
   program.parse_args(argc, argv);
 
   queue_depth = program.get<int>("-d");
@@ -648,6 +652,7 @@ void parse_args(int argc, char **argv) {
   aio = program.get<bool>("-a");
   exprm = program.get<string>("-exp");
   fn = program.get<int>("-fn");
+  numthreads = program.get<int>("-threads");
 }
 
 int main(int argc, char **argv) {
@@ -657,7 +662,12 @@ int main(int argc, char **argv) {
     if (exprm == "ml") {
       test_io_uring_exp_contention();
     } else if (exprm == "mt") {
-      test_io_uring_exp_multithreads();
+      if (large) {
+        test_io_uring_exp_multithreads_large();
+      } else {
+        test_io_uring_exp_multithreads_small();
+      }
+      
     }
     return 0;
   }
