@@ -133,7 +133,7 @@ void test_large_io_uring() {
 
   // ======= open file ==============
   int fd;
-  fd = open("/mnt/large-file", O_WRONLY | O_APPEND | O_CREAT | O_TRUNC | O_DIRECT, 0644);
+  fd = open("/mnt/large-file", O_WRONLY | O_APPEND | O_CREAT | O_DIRECT, 0644);
   if (fd < 0) {
     fprintf(stderr, "Error open file: %s", strerror(-ret));
     return;
@@ -635,9 +635,9 @@ void parse_args(int argc, char **argv) {
   program.add_argument("-c").help("test with closed loop (normal blocking read/write syscall rather than io_uring)").default_value(false).implicit_value(true);
   program.add_argument("-r").help("test reading, default is writing").default_value(false).implicit_value(true);
   program.add_argument("-a").help("use libaio instead of io_uring").default_value(false).implicit_value(true);
-  program.add_argument("-exp").help("do experiment to help understand results (multiple large files [ml], multi-threads [mt])").default_value("");
+  program.add_argument("-exp").help("do experiment to help understand results (multiple large files [ml], multi-threads [mt])").default_value(string(""));
   program.add_argument("-fn").help("number of large files").default_value(1).scan<'i', int>();
-  program.add_argument("-threads").help("number of threads").default_value(std::thread::hardware_concurrency()).scan<'i', int>();
+  program.add_argument("-threads").help("number of threads").default_value(1).scan<'i', int>();
   program.parse_args(argc, argv);
 
   queue_depth = program.get<int>("-d");
@@ -650,9 +650,9 @@ void parse_args(int argc, char **argv) {
   closed_loop = program.get<bool>("-c");
   test_read = program.get<bool>("-r");
   aio = program.get<bool>("-a");
-  exprm = program.get<string>("-exp");
   fn = program.get<int>("-fn");
   numthreads = program.get<int>("-threads");
+  exprm = program.get<string>("-exp");
 }
 
 int main(int argc, char **argv) {

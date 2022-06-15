@@ -1,22 +1,22 @@
 [global]
 name=random_read
-rw=randwrite
+rw=write
 direct=1
-ioengine=libaio
+ioengine=sync
 size=1G
 gtod_reduce=0
 cpus_allowed_policy=split
 thread
 group_reporting
 time_based
-runtime=60
+runtime=20
 
 ; controllable variables
-bs=4k
+bs=64k
 iodepth=128
 cpus_allowed=0-15
-numjobs=16
+numjobs=2
 
 ; Remote device
 [device]
-filename=/dev/nvme1n1
+filename=/mnt/test

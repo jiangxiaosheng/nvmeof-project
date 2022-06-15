@@ -1,0 +1,45 @@
+# all write to a single large file (1GB)
+# SPDK target, Linux kernel initiator
+
+[sequential write]
+------------------------ 1 thread -------------------------
+[4KB]
+ioengine=sync: 71.8MiB/s, 18.4k IOPS
+ioengine=io_uring: 914MiB/s, 234k IOPS
+
+[64KB]
+ioengine=sync: 394MiB/s, 6352 IOPS
+ioengine=io_uring: 1344MiB/s, 21.5k IOPS
+
+[512KB]
+ioengine=sync: 899MiB/s, 1776 IOPS
+ioengine=io_uring: 1385MiB/s, 2770 IOPS
+
+[1MB]
+ioengine=sync: 1067MiB/s, 1067 IOPS
+ioengine=io_uring: 1495MiB/s, 1495 IOPS
+
+[4MB]
+ioengine=sync: 1265MiB/s, 316 IOPS
+ioengine=io_uring: 1424MiB/s, 356 IOPS
+
+------------------------ 2 thread -------------------------
+[4KB]
+ioengine=sync: 143MiB/s, 36.7k IOPS
+ioengine=io_uring: 1575MiB/s, 403k IOPS
+
+[64KB]
+ioengine=sync: 752MiB/s, 12.0k IOPS
+ioengine=io_uring: 1409MiB/s, 22.5k IOPS
+
+[512KB]
+ioengine=sync: 1616MiB/s, 3232 IOPS
+ioengine=io_uring: 2212MiB/s, 4423 IOPS
+
+[1MB]
+ioengine=sync: 1067MiB/s, 1067 IOPS
+ioengine=io_uring: 1495MiB/s, 1495 IOPS
+
+[4MB]
+ioengine=sync: 1265MiB/s, 316 IOPS
+ioengine=io_uring: 1424MiB/s, 356 IOPS
