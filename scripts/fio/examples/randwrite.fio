@@ -1,8 +1,8 @@
 [global]
-name=random_read
+name=random_write
 rw=write
 direct=1
-ioengine=sync
+ioengine=io_uring
 size=1G
 gtod_reduce=0
 cpus_allowed_policy=split
