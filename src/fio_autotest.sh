@@ -3,6 +3,9 @@
 set -e
 
 output_base_dir="results/fio"
+if [ ! -z "$OUTDIR" ]; then
+	output_base_dir=$OUTDIR
+fi
 test_file="/mnt/fiotest"
 
 function append_to_log() {
@@ -35,10 +38,10 @@ function sequential_write() {
 	result_file="seq_write_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential write with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -51,10 +54,10 @@ function sequential_write() {
 	result_file="seq_write_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential write with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -75,10 +78,10 @@ function random_write() {
 	result_file="rand_write_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random write with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -91,10 +94,10 @@ function random_write() {
 	result_file="rand_write_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random write with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -114,10 +117,10 @@ function sequential_read() {
 	result_file="seq_read_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential read with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -130,10 +133,10 @@ function sequential_read() {
 	result_file="seq_read_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential read with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -153,10 +156,10 @@ function random_read() {
 	result_file="rand_read_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random read with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -169,10 +172,10 @@ function random_read() {
 	result_file="rand_read_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random read with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -192,10 +195,10 @@ function sequential_rw() {
 	result_file="seq_rw_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential read & write with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -208,10 +211,10 @@ function sequential_rw() {
 	result_file="seq_rw_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== sequential read & write with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -231,10 +234,10 @@ function random_rw() {
 	result_file="rand_rw_iouring.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random read & write with io_uring =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=io_uring --numjobs=$thread --bs=$bs"
@@ -247,10 +250,10 @@ function random_rw() {
 	result_file="rand_rw_sync.txt"
 	result_file=$output_base_dir/$result_file
 	> $result_file
-	for thread in {1..4}
+	for thread in {1..6}
 	do
 		append_to_log "============== random read & write with sync io =============" "$result_file"
-		for bs in "4k" "64k" "512k" "1m" "4m"
+		for bs in "4k" "16k" "64k" "512k" "1m"
 		do
 			printf "[bs=$bs]\n" | tee -a $result_file
 			args="$base_args --ioengine=sync --numjobs=$thread --bs=$bs"
@@ -271,6 +274,7 @@ function usage() {
 	echo "seqrw             sequential read and write"
 	echo "randrw            random read and write"
 	echo "all               run all kinds of tests"
+	echo "OUTDIR            env: specify the output dir, default is ./results/fio"
 }
 
 if [ $# -ne 1 ]; then
