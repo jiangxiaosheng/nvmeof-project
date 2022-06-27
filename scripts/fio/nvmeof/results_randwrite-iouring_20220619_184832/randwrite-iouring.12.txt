@@ -1,0 +1,34 @@
+randwrite-iouring: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=io_uring, iodepth=128
+...
+fio-3.30-59-gd4bf5
+Starting 12 threads
+randwrite-iouring: Laying out IO file (1 file / 1024MiB)
+
+randwrite-iouring: (groupid=0, jobs=12): err= 0: pid=19566: Sun Jun 19 19:00:36 2022
+  write: IOPS=135k, BW=528MiB/s (554MB/s)(31.0GiB/60031msec); 0 zone resets
+    slat (nsec): min=1200, max=15478k, avg=8878.81, stdev=60814.21
+    clat (usec): min=93, max=320154, avg=11347.76, stdev=15638.36
+     lat (usec): min=125, max=320158, avg=11356.64, stdev=15638.34
+    clat percentiles (usec):
+     |  1.00th=[  1057],  5.00th=[  1549], 10.00th=[  2057], 20.00th=[  3064],
+     | 30.00th=[  4228], 40.00th=[  5604], 50.00th=[  7308], 60.00th=[  9110],
+     | 70.00th=[ 10945], 80.00th=[ 13829], 90.00th=[ 22414], 95.00th=[ 37487],
+     | 99.00th=[ 80217], 99.50th=[109577], 99.90th=[156238], 99.95th=[185598],
+     | 99.99th=[233833]
+   bw (  KiB/s): min=159584, max=851008, per=100.00%, avg=542623.39, stdev=16207.40, samples=1428
+   iops        : min=39896, max=212752, avg=135655.19, stdev=4051.83, samples=1428
+  lat (usec)   : 100=0.01%, 250=0.01%, 500=0.01%, 750=0.02%, 1000=0.70%
+  lat (msec)   : 2=8.72%, 4=18.95%, 10=36.69%, 20=23.42%, 50=8.64%
+  lat (msec)   : 100=2.19%, 250=0.66%, 500=0.01%
+  cpu          : usr=3.52%, sys=6.57%, ctx=3102553, majf=0, minf=0
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.1%, 16=0.1%, 32=0.1%, >=64=100.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.1%
+     issued rwts: total=0,8115680,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=128
+
+Run status group 0 (all jobs):
+  WRITE: bw=528MiB/s (554MB/s), 528MiB/s-528MiB/s (554MB/s-554MB/s), io=31.0GiB (33.2GB), run=60031-60031msec
+
+Disk stats (read/write):
+  nvme1n1: ios=0/0, merge=0/0, ticks=0/0, in_queue=0, util=0.00%

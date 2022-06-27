@@ -1,0 +1,33 @@
+seqread-iouring: (g=0): rw=read, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=io_uring, iodepth=128
+...
+fio-3.30-59-gd4bf5
+Starting 13 threads
+seqread-iouring: Laying out IO file (1 file / 1024MiB)
+
+seqread-iouring: (groupid=0, jobs=13): err= 0: pid=148489: Sun Jun 26 16:11:22 2022
+  read: IOPS=203k, BW=791MiB/s (830MB/s)(46.4GiB/60008msec)
+    slat (usec): min=2, max=2814, avg= 8.87, stdev=13.92
+    clat (usec): min=701, max=219071, avg=8204.71, stdev=2666.06
+     lat (usec): min=719, max=219081, avg=8213.58, stdev=2665.94
+    clat percentiles (msec):
+     |  1.00th=[    7],  5.00th=[    7], 10.00th=[    7], 20.00th=[    8],
+     | 30.00th=[    8], 40.00th=[    8], 50.00th=[    9], 60.00th=[    9],
+     | 70.00th=[    9], 80.00th=[    9], 90.00th=[   10], 95.00th=[   11],
+     | 99.00th=[   12], 99.50th=[   12], 99.90th=[   13], 99.95th=[   14],
+     | 99.99th=[  215]
+   bw (  KiB/s): min=388986, max=903304, per=100.00%, avg=810947.28, stdev=4127.81, samples=1547
+   iops        : min=97246, max=225826, avg=202736.39, stdev=1031.96, samples=1547
+  lat (usec)   : 750=0.01%, 1000=0.01%
+  lat (msec)   : 2=0.01%, 4=0.01%, 10=93.95%, 20=6.02%, 250=0.01%
+  cpu          : usr=5.18%, sys=12.24%, ctx=297092, majf=0, minf=1664
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.1%, 16=0.1%, 32=0.1%, >=64=100.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.1%
+     issued rwts: total=12154340,0,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=128
+
+Run status group 0 (all jobs):
+   READ: bw=791MiB/s (830MB/s), 791MiB/s-791MiB/s (830MB/s-830MB/s), io=46.4GiB (49.8GB), run=60008-60008msec
+
+Disk stats (read/write):
+  sda: ios=284277/12, merge=11841911/9, ticks=2265263/154, in_queue=1646224, util=99.62%

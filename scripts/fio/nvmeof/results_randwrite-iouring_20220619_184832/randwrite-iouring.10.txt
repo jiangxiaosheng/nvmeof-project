@@ -1,0 +1,35 @@
+randwrite-iouring: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=io_uring, iodepth=128
+...
+fio-3.30-59-gd4bf5
+Starting 10 threads
+randwrite-iouring: Laying out IO file (1 file / 1024MiB)
+
+randwrite-iouring: (groupid=0, jobs=10): err= 0: pid=19279: Sun Jun 19 18:58:35 2022
+  write: IOPS=139k, BW=544MiB/s (570MB/s)(31.9GiB/60014msec); 0 zone resets
+    slat (nsec): min=1193, max=51906k, avg=8990.40, stdev=57129.65
+    clat (usec): min=49, max=270191, avg=9181.25, stdev=12360.58
+     lat (usec): min=104, max=270193, avg=9190.24, stdev=12360.53
+    clat percentiles (usec):
+     |  1.00th=[   947],  5.00th=[  1303], 10.00th=[  1663], 20.00th=[  2442],
+     | 30.00th=[  3326], 40.00th=[  4424], 50.00th=[  5800], 60.00th=[  7570],
+     | 70.00th=[  9241], 80.00th=[ 11469], 90.00th=[ 17171], 95.00th=[ 31589],
+     | 99.00th=[ 64226], 99.50th=[ 81265], 99.90th=[120062], 99.95th=[130548],
+     | 99.99th=[154141]
+   bw (  KiB/s): min=175807, max=847798, per=100.00%, avg=558143.07, stdev=15634.96, samples=1190
+   iops        : min=43951, max=211948, avg=139535.40, stdev=3908.75, samples=1190
+  lat (usec)   : 50=0.01%, 100=0.01%, 250=0.01%, 500=0.01%, 750=0.04%
+  lat (usec)   : 1000=1.44%
+  lat (msec)   : 2=12.94%, 4=22.12%, 10=37.26%, 20=17.96%, 50=6.12%
+  lat (msec)   : 100=1.82%, 250=0.30%, 500=0.01%
+  cpu          : usr=4.20%, sys=8.35%, ctx=3196610, majf=0, minf=0
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.1%, 16=0.1%, 32=0.1%, >=64=100.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.1%
+     issued rwts: total=0,8355266,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=128
+
+Run status group 0 (all jobs):
+  WRITE: bw=544MiB/s (570MB/s), 544MiB/s-544MiB/s (570MB/s-570MB/s), io=31.9GiB (34.2GB), run=60014-60014msec
+
+Disk stats (read/write):
+  nvme1n1: ios=0/0, merge=0/0, ticks=0/0, in_queue=0, util=0.00%

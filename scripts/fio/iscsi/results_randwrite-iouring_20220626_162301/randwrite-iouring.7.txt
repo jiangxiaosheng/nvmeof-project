@@ -1,0 +1,34 @@
+randwrite-iouring: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=io_uring, iodepth=128
+...
+fio-3.30-59-gd4bf5
+Starting 7 threads
+randwrite-iouring: Laying out IO file (1 file / 1024MiB)
+
+randwrite-iouring: (groupid=0, jobs=7): err= 0: pid=150860: Sun Jun 26 16:30:04 2022
+  write: IOPS=28.5k, BW=111MiB/s (117MB/s)(6689MiB/60033msec); 0 zone resets
+    slat (nsec): min=1458, max=416157, avg=6163.25, stdev=4565.55
+    clat (usec): min=786, max=194377, avg=31401.60, stdev=12435.04
+     lat (usec): min=792, max=194382, avg=31407.77, stdev=12435.01
+    clat percentiles (msec):
+     |  1.00th=[   12],  5.00th=[   14], 10.00th=[   16], 20.00th=[   19],
+     | 30.00th=[   26], 40.00th=[   29], 50.00th=[   31], 60.00th=[   32],
+     | 70.00th=[   39], 80.00th=[   44], 90.00th=[   47], 95.00th=[   53],
+     | 99.00th=[   63], 99.50th=[   71], 99.90th=[   90], 99.95th=[  101],
+     | 99.99th=[  123]
+   bw (  KiB/s): min=78896, max=141600, per=99.95%, avg=114032.87, stdev=1663.63, samples=833
+   iops        : min=19724, max=35400, avg=28508.20, stdev=415.91, samples=833
+  lat (usec)   : 1000=0.01%
+  lat (msec)   : 2=0.02%, 4=0.06%, 10=0.15%, 20=21.11%, 50=72.94%
+  lat (msec)   : 100=5.68%, 250=0.05%
+  cpu          : usr=2.02%, sys=3.23%, ctx=962793, majf=0, minf=0
+  IO depths    : 1=0.1%, 2=0.1%, 4=0.1%, 8=0.1%, 16=0.1%, 32=0.1%, >=64=100.0%
+     submit    : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
+     complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.1%
+     issued rwts: total=0,1712256,0,0 short=0,0,0,0 dropped=0,0,0,0
+     latency   : target=0, window=0, percentile=100.00%, depth=128
+
+Run status group 0 (all jobs):
+  WRITE: bw=111MiB/s (117MB/s), 111MiB/s-111MiB/s (117MB/s-117MB/s), io=6689MiB (7013MB), run=60033-60033msec
+
+Disk stats (read/write):
+  sda: ios=0/1705200, merge=0/8931, ticks=0/15024316, in_queue=11586376, util=99.92%
