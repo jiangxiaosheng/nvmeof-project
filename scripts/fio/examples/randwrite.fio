@@ -2,7 +2,7 @@
 name=random_write
 rw=write
 direct=1
-ioengine=io_uring
+ioengine=external:/users/sjiang/nvmeof-project/fio/engines/net_rw.o
 size=1G
 gtod_reduce=0
 cpus_allowed_policy=split
