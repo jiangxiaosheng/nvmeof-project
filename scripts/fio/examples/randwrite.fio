@@ -2,7 +2,8 @@
 name=random_write
 rw=write
 direct=1
-ioengine=external:/users/sjiang/nvmeof-project/fio/engines/net_rw.o
+ioengine=external:/users/sjiang/nvmeof-project/fio/engines/rdma_rw.o
+port=9876
 size=1G
 gtod_reduce=0
 cpus_allowed_policy=split
