@@ -2,9 +2,9 @@
 name=random_write
 rw=write
 direct=1
-ioengine=external:/users/sjiang/nvmeof-project/fio/engines/rdma_rw.o
-port=9876
-size=1G
+ioengine=io_uring
+; port=9876
+size=10g
 gtod_reduce=0
 cpus_allowed_policy=split
 thread
@@ -13,10 +13,10 @@ time_based
 runtime=20
 
 ; controllable variables
-bs=64k
+bs=4k
 iodepth=128
 cpus_allowed=0-15
-numjobs=2
+numjobs=1
 
 ; Remote device
 [device]
