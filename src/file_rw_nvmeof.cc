@@ -119,6 +119,7 @@ void test_large_io_uring_poll() {
 void test_large_io_uring() {
   // =============== setup io_uring context =================
   int ret;
+  unsigned long filesize = 10 * 1024UL * 1024 * 1024;
 
   struct io_uring ring;
   struct io_uring_params params;
@@ -133,7 +134,7 @@ void test_large_io_uring() {
 
   // ======= open file ==============
   int fd;
-  fd = open("/mnt/large-file", O_WRONLY | O_APPEND | O_CREAT | O_DIRECT, 0644);
+  fd = open("/mnt/test", O_WRONLY | O_CREAT | O_DIRECT, 0644);
   if (fd < 0) {
     fprintf(stderr, "Error open file: %s", strerror(-ret));
     return;
@@ -173,11 +174,11 @@ void test_large_io_uring() {
       fprintf(stderr, "Could not get SQE: %d\n", i);
       return;
     }
-    io_uring_prep_write(sqe, fd, buff, buffer_size, 0);
+    io_uring_prep_write(sqe, fd, buff, buffer_size, (i * buffer_size) % filesize);
     io_uring_submit(&ring);
   }
 
-  cq_thread.join();
+//   cq_thread.join();
 
   auto duration = system_clock::now() - start;
   printf("total time for appending is %lu milliseconds\n", chrono::duration_cast<chrono::milliseconds>(duration).count());
