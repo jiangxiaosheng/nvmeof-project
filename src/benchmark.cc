@@ -2,6 +2,7 @@
 #include <liburing.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <errno.h>
 #include <string>
 #include <sys/types.h>
@@ -22,11 +23,14 @@ using namespace std::chrono;
 /* global options */
 int num_workers;
 unsigned bs; /* in KB */
-unsigned batch_submit;
+unsigned io_uring_batch_submit;
+unsigned rdma_batch_submit;
 std::string test_file;
 unsigned file_size; /* in GB */
-int queue_depth;
+int io_uring_queue_depth;
+int rdma_queue_depth;
 unsigned runtime; /* in seconds */
+bool client;
 
 struct io_worker {
 	struct io_uring ring;
@@ -39,6 +43,7 @@ struct io_worker {
 	cpu_set_t cpuset;
 	int fd;
 	bool stopped;
+	decltype(system_clock::now()) start_time;
 };
 
 
@@ -110,7 +115,7 @@ void *do_io(void *arg) {
 	}
 
 	memset(&worker->params, 0, sizeof(worker->params));
-	if (io_uring_queue_init_params(queue_depth, &worker->ring, &worker->params)) {
+	if (io_uring_queue_init_params(io_uring_queue_depth, &worker->ring, &worker->params)) {
 		perror("io_uring_queue_init_params");
 		goto err;
 	}
@@ -121,8 +126,8 @@ void *do_io(void *arg) {
 		goto err;
 	}
 
-	start = system_clock::now();
-	while (!runtime_exceeded(start)) {
+	worker->start_time = system_clock::now();
+	while (!runtime_exceeded(worker->start_time)) {
 		struct io_uring_sqe *sqe;
 		
 		do {
@@ -131,14 +136,15 @@ void *do_io(void *arg) {
 				break;
 			reap_io_uring_cq(worker, 0);
 		} while (true);
-		io_uring_prep_write(sqe, worker->fd, data_buffer, bs, worker->cur_offset);
-		worker->cur_offset += bs;
+		io_uring_prep_write(sqe, worker->fd, data_buffer, bs * KB, worker->cur_offset);
+		// printf("fd %d, data_buffer %p, bs %d, offset %lu\n", worker->fd, data_buffer, bs, worker->cur_offset);
+		worker->cur_offset += bs * KB;
 		if (worker->cur_offset >= file_size * GB)
 			worker->cur_offset = 0;
 		worker->free_io_units--;
 
 		worker->sqes_queued++;
-		if (worker->sqes_queued == batch_submit) {
+		if (worker->sqes_queued == io_uring_batch_submit) {
 			while (worker->sqes_queued != 0) {
 				ret = io_uring_submit(&worker->ring);
 				if (ret > 0) {
@@ -160,6 +166,7 @@ void *do_io(void *arg) {
 
 err:
 	pthread_exit((void *)1);
+	return NULL;
 }
 
 /* create a worker thread on the specified cpu */
@@ -167,10 +174,10 @@ struct io_worker *launch_worker(int cpu) {
 	struct io_worker *worker = (struct io_worker *) malloc(sizeof(struct io_worker));
 
 	memset(worker, 0, sizeof(worker));
-	worker->free_io_units = queue_depth;
+	worker->free_io_units = io_uring_queue_depth;
 	worker->stopped = false;
 
-	pthread_create(&worker->tid, NULL, do_io, NULL);
+	pthread_create(&worker->tid, NULL, do_io, (void *) worker);
 	if (set_worker_cpu(worker, cpu)) {
 		free(worker);
 		return NULL;
@@ -182,20 +189,29 @@ struct io_worker *launch_worker(int cpu) {
 /* no need to prevent race condition as the accurate numer will be calculated when it terminates */
 void *calculate_stats(void *arg) {
 	struct io_worker *worker = (struct io_worker *) (arg);
-	unsigned io_completed = worker->io_completed;
+	unsigned io_completed;
+	double thru;
+	unsigned kiops;
+	unsigned duration_ms;
 
-	printf("bs=%dKB, queue_depth=%d, test_file=%s, batch_submit=%d\n\n",
-		bs, queue_depth, test_file.data(), batch_submit);
+	printf("bs=%dKB, io_uring_queue_depth=%d, test_file=%s, io_uring_batch_submit=%d\n\n",
+		bs, io_uring_queue_depth, test_file.data(), io_uring_batch_submit);
 
 	while (!worker->stopped) {
-		printf("throughput: %f MB/s (%dK IOPS)\n"); // TODO
+		io_completed = worker->io_completed;
+		duration_ms = duration_cast<milliseconds>(system_clock::now() - worker->start_time).count();
+		if (io_completed == 0 || duration_ms == 0)
+			continue;
+
+		// printf("io_completed %lu, duration_ms %d\n", io_completed, duration_ms);
+		thru = 1.0 * io_completed * bs * KB / MB / duration_ms * 1000;
+		kiops = io_completed / duration_ms;
+		printf("\rthroughput: %f MB/s (%dK IOPS)\n", thru, kiops);
+		fflush(stdout);
+		sleep(1);
 	}
-}
 
-pthread_t run_stats_monitor(struct io_worker *worker) {
-	pthread_t monitor_thread;
-
-	pthread_create(&monitor_thread, NULL, calculate_stats, (void *) worker);
+	return NULL;
 }
 
 
@@ -203,18 +219,20 @@ void parse_args(int argc, char *argv[]) {
 	argparse::ArgumentParser program;
 	program.add_argument("-bs").help("block size for each I/O in KB").default_value(4).scan<'i', int>();
 	program.add_argument("-file").help("test file on which we do the I/Os").default_value("");
-	program.add_argument("-qd").help("io_uring queue sq depth").default_value(128).scan<'i', int>();
+	program.add_argument("-iouring-qd").help("io_uring queue sq depth").default_value(128).scan<'i', int>();
 	program.add_argument("-runtime").help("runtime of the benchmark").default_value(30).scan<'i', int>();
 	program.add_argument("-filesize").help("size of the test file in GB").default_value(10).scan<'i', int>();
-	program.add_argument("-batch-submit").help("io_uring sqe submission batch").default_value(32).scan<'i', int>();
+	program.add_argument("-iouring-batch-submit").help("io_uring sqe submission batch").default_value(32).scan<'i', int>();
+	program.add_argument("-client").help("rdma io_uring client").default_value(false).implicit_value(true);
 	program.parse_args(argc, argv);
 
 	bs = program.get<int>("-bs");
 	test_file = program.get<std::string>("-file");
 	file_size = program.get<int>("-filesize");
-	queue_depth = program.get<int>("-qd");
+	io_uring_queue_depth = program.get<int>("-qd");
 	runtime = program.get<int>("-runtime");
-	batch_submit = program.get<int>("-batch-submit");
+	io_uring_batch_submit = program.get<int>("-batch-submit");
+	client = program.get<bool>("-client");
 
 	if (test_file == "") {
 		printf("no test file given");
@@ -223,10 +241,14 @@ void parse_args(int argc, char *argv[]) {
 
 
 int main(int argc, char *argv[]) {
-	parse_args(argc, argv);
-
 	struct io_worker *worker;
+	pthread_t monitor_thread;
+
+	parse_args(argc, argv);
 	
 	worker = launch_worker(0);
+	monitor_thread = pthread_create(&monitor_thread, NULL, calculate_stats, (void *) worker);
+
 	pthread_join(worker->tid, NULL);
+	pthread_join(monitor_thread, NULL);
 }
