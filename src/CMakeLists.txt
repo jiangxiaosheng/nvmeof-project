@@ -84,7 +84,7 @@ add_executable(file_rw_nvmeof file_rw_nvmeof.cc)
 target_link_libraries(file_rw_nvmeof nvme uring pthread aio)
 
 add_executable(benchmark benchmark.cc)
-target_link_libraries(benchmark pthread uring)
+target_link_libraries(benchmark pthread uring rdmacm ibverbs)
 
 # target_link_libraries(initiator ibverbs nvme)
 

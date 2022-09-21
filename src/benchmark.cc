@@ -10,6 +10,8 @@
 #include <string.h>
 #include <malloc.h>
 #include <chrono>
+#include <rdma/rdma_cma.h>
+#include <rdma/rdma_verbs.h>
 
 #include "third_party/argparse.hpp"
 
@@ -31,19 +33,34 @@ int io_uring_queue_depth;
 int rdma_queue_depth;
 unsigned runtime; /* in seconds */
 bool client;
+bool user_rdma;
+std::string host;
+int base_port;
 
 struct io_worker {
+	int worker_id;
 	struct io_uring ring;
 	struct io_uring_params params;
 	unsigned sqes_queued;
 	unsigned long cur_offset;
-	unsigned long io_completed;
-	unsigned long free_io_units;
+	unsigned long io_completed; // for io_uring only
+	unsigned long free_io_units_io_uring;
+	unsigned long free_io_units_rdma;
 	pthread_t tid;
 	cpu_set_t cpuset;
 	int fd;
 	bool stopped;
 	decltype(system_clock::now()) start_time;
+
+	/* rdma stuff */
+	struct rdma_cm_id *cm_id, *cm_listen_id;
+	struct ibv_comp_channel *comp_channel;
+	struct rdma_event_channel *cm_channel;
+	struct ibv_cq *cq;
+	struct ibv_pd *pd;
+	struct ibv_qp *qp;
+	struct sockaddr_in addr;
+	int port;
 };
 
 
@@ -79,7 +96,7 @@ int reap_io_uring_cq(struct io_worker *worker, int min) {
 			io_uring_cqe_seen(&worker->ring, cqe);
 			reaped++;
 			worker->io_completed++;
-			worker->free_io_units++;
+			worker->free_io_units_io_uring++;
 		}
 	} while (reaped < min);
 
@@ -88,7 +105,7 @@ int reap_io_uring_cq(struct io_worker *worker, int min) {
 
 
 /* actual I/Os executed by a worker */
-void *do_io(void *arg) {
+void *do_io_io_uring(void *arg) {
 	struct io_worker *worker = (struct io_worker *) arg;
 	struct stat st;
 	void *data_buffer;
@@ -141,7 +158,7 @@ void *do_io(void *arg) {
 		worker->cur_offset += bs * KB;
 		if (worker->cur_offset >= file_size * GB)
 			worker->cur_offset = 0;
-		worker->free_io_units--;
+		worker->free_io_units_io_uring--;
 
 		worker->sqes_queued++;
 		if (worker->sqes_queued == io_uring_batch_submit) {
@@ -156,7 +173,7 @@ void *do_io(void *arg) {
 			}
 		}
 
-		if (worker->free_io_units == 0) {
+		if (worker->free_io_units_io_uring == 0) {
 			reap_io_uring_cq(worker, 1);
 		}
 	}
@@ -169,15 +186,140 @@ err:
 	return NULL;
 }
 
+int get_next_channel_event(struct io_worker *worker,
+						enum rdma_cm_event_type wait_event) {
+	struct rdma_cm_event *event;
+	
+	if (rdma_get_cm_event(worker->channel, &event)) {
+		perror("rdma_get_cm_event");
+		return 1;
+	}
+
+	if (event->event != wait_event) {
+		printf("rdma event type mismatch! event is %s instead of %s\n",
+			rdma_event_str(event->event), rdma_event_str(wait_event));
+		return 1;
+	}
+
+	switch (event->event) {
+	case RDMA_CM_EVENT_CONNECT_REQUEST:
+		worker->cm_listen_id = event->id;
+		break;
+	default:
+		break;
+	}
+
+	rdma_ack_cm_event(event);
+	return 0;
+}
+
+int rdma_setup(struct io_worker *worker) { 
+	int ret;
+	
+	worker->cm_channel = rdma_create_event_channel();
+	if (!worker->cm_channel) {
+		perror("rdma_create_event_channel");
+		return 1;
+	}
+
+	if (client) {
+		if (rdma_create_id(worker->cm_channel, &worker->cm_id, worker, RDMA_PS_TCP)) {
+			perror("rdma_create_id");
+			return 1;
+		}
+	} else {
+		if (rdma_create_id(worker->cm_channel, &worker->cm_listen_id, worker, RDMA_PS_TCP)) {
+			perror("rdma_create_id");
+			return 1;
+		}
+	}
+	
+	worker->addr.sin_family = AF_INET;
+	worker->addr.sin_port = htons(base_port + worker->worker_id);
+	inet_aton(host, &worker->addr.sin_addr);
+
+	if (client) {
+		if (rdma_resolve_addr(worker->cm_id, NULL, (struct sockaddr *) &worker->addr, 2000)) {
+			perror("rdma_resolve_addr");
+			return 1;
+		}
+
+		if (get_next_channel_event(worker, RDMA_CM_EVENT_ADDR_RESOLVED)) {
+			perror("get_next_channel_event");
+			return 1;
+		}
+
+		if (rdma_resolve_route(worker->cm_id, 2000)) {
+			perror("rdma_resolve_route");
+			return 1;
+		}
+
+		if (get_next_channel_event()) {
+			perror("get_next_channel_event");
+			return 1;
+		}
+
+		worker->pd = ibv_alloc_pd(worker->cm_id->verbs);
+		if (!worker->pd) {
+			perror("ibv_alloc_pd");
+			return 1;
+		}
+
+		worker->comp_channel = ibv_create_comp_channel(worker->cm_id);
+		if (!worker->comp_channel) {
+			perror("ibv_create_comp_channel");
+			return 1;
+		}
+
+		worker->cq = ibv_create_cq(worker->cm_id->verbs, rdma_queue_depth, worker, worker->comp_channel, 0);
+		if (!worker->cq) {
+			perror("ibv_create_cq");
+			return 1;
+		}
+
+	} else {
+		if (rdma_bind_addr(worker->cm_listen_id, (struct sockaddr *) &worker->addr)) {
+			perror("rdma_bind_addr");
+			return 1;
+		}
+
+		if (rdma_listen(worker->cm_listen_id, 3)) {
+			perror("rdma_listen");
+			return 1;
+		}
+
+		if (get_next_channel_event(worker, RDMA_CM_EVENT_CONNECT_REQUEST)) {
+			perror("get_next_channel_event");
+			return 1;
+		}
+
+
+	}
+
+	return 0;
+}
+
+void *do_io_user_rdma(void *arg) {
+	struct io_worker *worker = (struct io_worker *) arg;
+
+
+	return NULL;
+}
+
 /* create a worker thread on the specified cpu */
 struct io_worker *launch_worker(int cpu) {
 	struct io_worker *worker = (struct io_worker *) malloc(sizeof(struct io_worker));
 
 	memset(worker, 0, sizeof(worker));
-	worker->free_io_units = io_uring_queue_depth;
+	worker->free_io_units_io_uring = io_uring_queue_depth;
+	worker->free_io_units_rdma = rdma_queue_depth;
+	worker->worker_id = 0;
 	worker->stopped = false;
 
-	pthread_create(&worker->tid, NULL, do_io, (void *) worker);
+	if (user_rdma)
+		pthread_create(&worker->tid, NULL, do_io_user_rdma, (void *) worker);
+	else
+		pthread_create(&worker->tid, NULL, do_io_io_uring, (void *) worker);
 	if (set_worker_cpu(worker, cpu)) {
 		free(worker);
 		return NULL;
@@ -214,25 +356,32 @@ void *calculate_stats(void *arg) {
 	return NULL;
 }
 
-
 void parse_args(int argc, char *argv[]) {
 	argparse::ArgumentParser program;
 	program.add_argument("-bs").help("block size for each I/O in KB").default_value(4).scan<'i', int>();
 	program.add_argument("-file").help("test file on which we do the I/Os").default_value("");
 	program.add_argument("-iouring-qd").help("io_uring queue sq depth").default_value(128).scan<'i', int>();
+	program.add_argument("-rdma-qd").help("rdma queue depth").default_value(128).scan<'i', int>();
 	program.add_argument("-runtime").help("runtime of the benchmark").default_value(30).scan<'i', int>();
 	program.add_argument("-filesize").help("size of the test file in GB").default_value(10).scan<'i', int>();
 	program.add_argument("-iouring-batch-submit").help("io_uring sqe submission batch").default_value(32).scan<'i', int>();
+	program.add_argument("-rdma-batch-submit").help("rdma wqe submittion batch").default_value(32).scan<'i', int>();
 	program.add_argument("-client").help("rdma io_uring client").default_value(false).implicit_value(true);
+	program.add_argument("-host").help("host address for rdma").default_value("10.10.1.2");
+	program.add_argument("-port").help("port number for rdma").default_value("9876").scan<'i', int>();
 	program.parse_args(argc, argv);
 
 	bs = program.get<int>("-bs");
 	test_file = program.get<std::string>("-file");
 	file_size = program.get<int>("-filesize");
-	io_uring_queue_depth = program.get<int>("-qd");
+	io_uring_queue_depth = program.get<int>("-iouring-qd");
+	rdma_queue_depth = program.get<int>("-rdma-qd");
 	runtime = program.get<int>("-runtime");
-	io_uring_batch_submit = program.get<int>("-batch-submit");
+	io_uring_batch_submit = program.get<int>("-iouring-batch-submit");
+	rdma_batch_submit = program.get<int>("-rdma-batch-submit");
 	client = program.get<bool>("-client");
+	host = program.get<std::string>("-host");
+	base_port = program.get<int>("-port");
 
 	if (test_file == "") {
 		printf("no test file given");
