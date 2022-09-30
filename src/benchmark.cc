@@ -22,6 +22,7 @@ const unsigned KB = 1024;
 const unsigned MB = 1024 * 1024;
 const unsigned long GB = 1024 * 1024 * 1024;
 const unsigned PAGESIZE = 4096;
+const int POLL_BATCH = 16;
 
 using namespace std::chrono;
 
@@ -39,6 +40,7 @@ bool client;
 bool user_rdma;
 std::string host;
 int base_port;
+bool event;
 
 struct rdma_rmt_buf {
 	uint64_t addr;
@@ -228,12 +230,20 @@ int get_next_channel_event(struct io_worker *worker,
 
 int rdma_handshake(struct io_worker *worker) {
 	struct rdma_conn_param conn_param;
+	struct ibv_device_attr dev_attr;
+	int ret;
+
+	if (ibv_query_device(worker->cm_id->verbs, &dev_attr)) {
+		perror("ibv_query_device");
+		return 1;
+	}
 
 	memset(&conn_param, 0, sizeof(conn_param));
-	conn_param.responder_resources = 1;
-	conn_param.initiator_depth = 1;
+	conn_param.responder_resources = dev_attr.max_qp_rd_atom;
+	conn_param.initiator_depth = dev_attr.max_qp_rd_atom;
 	conn_param.retry_count = 7;
 	conn_param.rnr_retry_count = 7;
+
 
 	if (client) {
 		struct ibv_recv_wr token_wr, *bad_wr;
@@ -242,7 +252,7 @@ int rdma_handshake(struct io_worker *worker) {
 		void *ev_ctx;
 		struct ibv_wc wc;
 		struct ibv_mr *tmp_mr;
-		int ret;
+		
 
 		if (rdma_connect(worker->cm_id, &conn_param)) {
 			perror("rdma_connect");
@@ -297,7 +307,18 @@ int rdma_handshake(struct io_worker *worker) {
 
 		ibv_ack_cq_events(worker->cq, 1);
 
-		printf("rmt addr: %lu, length: %u, rkey: %u\n", worker->rmt_buf.addr, worker->rmt_buf.size, worker->rmt_buf.rkey);
+		worker->data_pool = (uint64_t) (unsigned long) memalign(PAGESIZE, worker->rmt_buf.size);
+		if (!worker->data_pool) {
+			perror("memalign");
+			return 1;
+		}
+		worker->data_pool_mr = ibv_reg_mr(worker->pd, (void *) worker->data_pool, worker->rmt_buf.size, 
+					IBV_ACCESS_LOCAL_WRITE);
+		if (!worker->data_pool_mr) {
+			perror("ibv_reg_mr");
+			return 1;
+		}
+
 	} else {
 		struct ibv_send_wr token_wr, *bad_wr;
 		struct ibv_sge sgl;
@@ -305,7 +326,6 @@ int rdma_handshake(struct io_worker *worker) {
 		void *ev_ctx;
 		struct ibv_wc wc;
 		struct ibv_mr *tmp_mr;
-		int ret;
 
 		if (rdma_accept(worker->cm_id, &conn_param)) {
 			perror("rdma_accept");
@@ -387,7 +407,6 @@ int rdma_handshake(struct io_worker *worker) {
 			return 1;
 		}
 
-		printf("rmt addr: %lu, length: %u, rkey: %u\n", worker->rmt_buf.addr, worker->rmt_buf.size, worker->rmt_buf.rkey);
 	}
 
 	return 0;
@@ -435,7 +454,7 @@ int rdma_setup(struct io_worker *worker) {
 
 		if (get_next_channel_event(worker, RDMA_CM_EVENT_ROUTE_RESOLVED))
 			return 1;
-		printf("%s\n", worker->cm_id->verbs->device->name);
+
 	} else {
 		if (rdma_bind_addr(worker->cm_listen_id, (struct sockaddr *) &worker->addr)) {
 			perror("rdma_bind_addr");
@@ -450,7 +469,6 @@ int rdma_setup(struct io_worker *worker) {
 		if (get_next_channel_event(worker, RDMA_CM_EVENT_CONNECT_REQUEST))
 			return 1;
 
-		printf("%s\n", worker->cm_id->verbs->device->name);
 	}
 
 	worker->pd = ibv_alloc_pd(worker->cm_id->verbs);
@@ -494,61 +512,79 @@ int rdma_setup(struct io_worker *worker) {
 	return 0;
 }
 
-int reap_rdma_cq(struct io_worker *worker, int min) {
-	struct ibv_wc wc;
+int reap_rdma_cq(struct io_worker *worker, int min, struct ibv_wc *wc) {
 	struct ibv_cq *ev_cq;
 	void *ev_ctx;
 	unsigned reaped = 0;
 	int ret;
 
 again:
-	if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
-		perror("ibv_get_cq_event");
-		return -1;
-	}
-	if (ev_cq != worker->cq) {
-		printf("unknown cq\n");
-		return -1;
-	}
-	if (ibv_req_notify_cq(worker->cq, 0)) {
-		perror("ibv_req_notify_cq");
-		return -1;
+	if (event) {
+		if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+			perror("ibv_get_cq_event");
+			return -1;
+		}
+		if (ev_cq != worker->cq) {
+			printf("unknown cq\n");
+			return -1;
+		}
+		if (ibv_req_notify_cq(worker->cq, 0)) {
+			perror("ibv_req_notify_cq");
+			return -1;
+		}
 	}
 
 	do {
-		ret = ibv_poll_cq(worker->cq, 1, &wc);
+		ret = ibv_poll_cq(worker->cq, POLL_BATCH, wc);
 		if (ret < 0) {
 			perror("ibv_poll_cq");
 			return -1;
-		}
-		if (ret == 0)
+		} else if (ret == 0) {
 			break;
-		if (wc.status != IBV_WC_SUCCESS) {
-			printf("cq completion status: %d(%s)\n",
-				wc.status, ibv_wc_status_str(wc.status));
-			return -1;
+		} else {
+			for (int i = 0; i < ret; i++) {
+				if (wc[i].status != IBV_WC_SUCCESS) {
+					printf("cq completion status: %d(%s)\n",
+						wc[i].status, ibv_wc_status_str(wc[i].status));
+					return -1;
+				}
+			}
+			reaped += ret;
+			worker->io_completed += ret;
+			worker->free_io_units_rdma += ret;
 		}
-
-		reaped++;
-		worker->io_completed++;
-		worker->free_io_units_rdma++;
 	} while (ret);
 
 	if (reaped < min)
 		goto again;
 
-	// printf("reaped %d, ret %d\n", reaped, ret);
-
-	ibv_ack_cq_events(worker->cq, reaped);
+	if (event)
+		ibv_ack_cq_events(worker->cq, reaped);
 	return 0;
+}
+
+void rdma_client_terminate(struct io_worker *worker) {
+	struct ibv_send_wr end_wr, *bad_wr;
+	struct ibv_sge sgl;
+
+	sgl.addr = worker->data_pool;
+	sgl.length = 4;
+	sgl.lkey = worker->data_pool_mr->lkey;
+
+	end_wr.sg_list = &sgl;
+	end_wr.num_sge = 1;
+	end_wr.next = NULL;
+
+	if (ibv_post_send(worker->qp, &end_wr, &bad_wr)) {
+		perror("ibv_post_send");
+	}
 }
 
 void *do_io_user_rdma(void *arg) {
 	struct io_worker *worker = (struct io_worker *) arg;
 	struct ibv_send_wr wr, *bad_wr;
 	struct ibv_sge sgl;
-	uint64_t data_buffer;
-	struct ibv_mr *data_buffer_mr;
+	struct ibv_wc wc[POLL_BATCH];
 	unsigned int offset = 0;
 
 	if (rdma_setup(worker))
@@ -558,28 +594,45 @@ void *do_io_user_rdma(void *arg) {
 		goto err;
 
 	if (!client) {
-		// TODO
-		sleep(120);
+		struct ibv_recv_wr end_wr, *bad_wr;
+		struct ibv_cq *ev_cq;
+		void *ev_ctx;
+		
+		sgl.addr = worker->data_pool;
+		sgl.length = 4;
+		sgl.lkey = worker->data_pool_mr->lkey;
+
+		end_wr.sg_list = &sgl;
+		end_wr.num_sge = 1;
+		end_wr.next = NULL;
+
+		ibv_post_recv(worker->qp, &end_wr, &bad_wr);
+
+		if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+			perror("ibv_get_cq_event");
+			goto err_server;
+		}
+		if (ev_cq != worker->cq) {
+			printf("unknown cq\n");
+			goto err_server;
+		}
+		if (ibv_poll_cq(worker->cq, 1, wc) != 1) {
+			perror("ibv_poll_cq");
+			goto err_server;
+		}
+		ibv_ack_cq_events(worker->cq, 1);
+		
+		return NULL;
+	err_server:
+		pthread_exit((void *)1);
 		return NULL;
 	}
 
-	data_buffer = (uint64_t) (unsigned long) memalign(PAGESIZE, worker->rmt_buf.size);
-	if (!data_buffer) {
-		perror("memalign");
-		goto err;
-	}
-	data_buffer_mr = ibv_reg_mr(worker->pd, (void *) data_buffer, worker->rmt_buf.size, 
-				IBV_ACCESS_LOCAL_WRITE);
-	if (!data_buffer_mr) {
-		perror("ibv_reg_mr");
-		goto err;
-	}
 	sgl.length = bs;
-	sgl.lkey = data_buffer_mr->lkey;
-	wr.opcode = IBV_WR_RDMA_WRITE;
+	sgl.lkey = worker->data_pool_mr->lkey;
+	wr.opcode = IBV_WR_RDMA_READ;
 	wr.send_flags = IBV_SEND_SIGNALED;
 	wr.wr.rdma.rkey = worker->rmt_buf.rkey;
-	// wr.wr.rdma.remote_addr = worker->rmt_buf.addr;
 	wr.sg_list = &sgl;
 	wr.num_sge = 1;
 	wr.next = NULL;
@@ -587,25 +640,27 @@ void *do_io_user_rdma(void *arg) {
 	worker->start_time = system_clock::now();
 	while (!runtime_exceeded(worker->start_time)) {
 		int ret;
-		sgl.addr = data_buffer + offset;
+		sgl.addr = worker->data_pool + offset;
 		wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
 		offset += bs;
 		if (offset >= worker->rmt_buf.size)
 			offset = 0;
 		
 		if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
-			perror("ibv_post_send");
+			printf("ibv_post_send: %s, ret = %d\n", strerror(ret), ret);
 			goto err;
 		}
+
 		worker->free_io_units_rdma--;
 		
 		if (worker->free_io_units_rdma == 0) {
-			if (reap_rdma_cq(worker, 1) < 0) {
+			if (reap_rdma_cq(worker, 1, wc) < 0)
 				goto err;
-			}
-			// printf("free_io_units %d\n", worker->free_io_units_rdma);
 		}
 	}
+
+	worker->stopped = true;
+	rdma_client_terminate(worker);
 
 	return NULL;
 
@@ -647,8 +702,8 @@ void *calculate_stats(void *arg) {
 	unsigned kiops;
 	unsigned duration_ms;
 
-	printf("bs=%ldB, io_uring_queue_depth=%d, test_file=%s, io_uring_batch_submit=%d\n\n",
-		bs, io_uring_queue_depth, test_file.data(), io_uring_batch_submit);
+	printf("bs=%ldB, io_uring_queue_depth=%d, test_file=%s, io_uring_batch_submit=%d, event=%d\n\n",
+		bs, io_uring_queue_depth, test_file.data(), io_uring_batch_submit, event);
 
 	if (user_rdma && !client)
 		return NULL;
@@ -684,6 +739,7 @@ int parse_args(int argc, char *argv[]) {
 	program.add_argument("-host").help("host address for rdma").default_value(std::string("10.10.1.2"));
 	program.add_argument("-port").help("port number for rdma").default_value(9876).scan<'i', int>();
 	program.add_argument("-user-rdma").help("perform the userspace rdma benchmark, default is NVMeoF").default_value(false).implicit_value(true);
+	program.add_argument("-event").help("sleep on cq events, default is poll").default_value(false).implicit_value(true);
 
 	if (argc == 1) {
 		printf("%s\n", program.help().str().data());
@@ -704,6 +760,7 @@ int parse_args(int argc, char *argv[]) {
 		host = program.get<std::string>("-host");
 		base_port = program.get<int>("-port");
 		user_rdma = program.get<bool>("-user-rdma");
+		event = program.get<bool>("-event");
 	} catch (std::exception &e) {
 		printf("%s\n", e.what());
 		printf("%s\n", program.help().str().data());
