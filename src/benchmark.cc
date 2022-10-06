@@ -23,6 +23,7 @@ const unsigned MB = 1024 * 1024;
 const unsigned long GB = 1024 * 1024 * 1024;
 const unsigned PAGESIZE = 4096;
 const int POLL_BATCH = 16;
+const int RDMA_REAP_FREQ = 256;
 
 using namespace std::chrono;
 
@@ -52,7 +53,8 @@ struct io_worker {
 	int worker_id;
 	struct io_uring ring;
 	struct io_uring_params params;
-	unsigned sqes_queued;
+	unsigned io_uring_sqe_queued;
+	unsigned long rdma_wr_posted;
 	unsigned long cur_offset;
 	unsigned long io_completed; // for io_uring only
 	unsigned long free_io_units_io_uring;
@@ -175,12 +177,12 @@ void *do_io_io_uring(void *arg) {
 			worker->cur_offset = 0;
 		worker->free_io_units_io_uring--;
 
-		worker->sqes_queued++;
-		if (worker->sqes_queued == io_uring_batch_submit) {
-			while (worker->sqes_queued != 0) {
+		worker->io_uring_sqe_queued++;
+		if (worker->io_uring_sqe_queued == io_uring_batch_submit) {
+			while (worker->io_uring_sqe_queued != 0) {
 				ret = io_uring_submit(&worker->ring);
 				if (ret > 0) {
-					worker->sqes_queued -= ret;
+					worker->io_uring_sqe_queued -= ret;
 				} else {
 					printf("im busy\n"); // debugging
 					reap_io_uring_cq(worker, 0);
@@ -516,6 +518,7 @@ int reap_rdma_cq(struct io_worker *worker, int min, struct ibv_wc *wc) {
 	struct ibv_cq *ev_cq;
 	void *ev_ctx;
 	unsigned reaped = 0;
+	struct io_uring_sqe *sqe;
 	int ret;
 
 again:
@@ -544,13 +547,46 @@ again:
 		} else {
 			for (int i = 0; i < ret; i++) {
 				if (wc[i].status != IBV_WC_SUCCESS) {
-					printf("cq completion status: %d(%s)\n",
-						wc[i].status, ibv_wc_status_str(wc[i].status));
+					printf("cq completion %d status: %d(%s), %d, %d\n",
+						i, wc[i].status, ibv_wc_status_str(wc[i].status), ret, POLL_BATCH);
 					return -1;
 				}
+
+				do {
+					sqe = io_uring_get_sqe(&worker->ring);
+					if (sqe != NULL)
+						break;
+					reap_io_uring_cq(worker, 0);
+				} while (true);
+
+				io_uring_prep_write(sqe, worker->fd, (void *) wc[i].wr_id,
+						bs, worker->cur_offset);
+				worker->cur_offset += bs;
+				if (worker->cur_offset >= file_size)
+					worker->cur_offset = 0;
+				worker->free_io_units_io_uring--;
+
+				worker->io_uring_sqe_queued++;
+
+				if (worker->io_uring_sqe_queued == io_uring_batch_submit) {
+					int sqe_submitted;
+					while (worker->io_uring_sqe_queued != 0) {
+						sqe_submitted = io_uring_submit(&worker->ring);
+						if (sqe_submitted > 0) {
+							worker->io_uring_sqe_queued -= sqe_submitted;
+						} else {
+							printf("im busy\n"); // debugging
+							reap_io_uring_cq(worker, 0);
+						}
+					}
+				}
+
+				if (worker->free_io_units_io_uring == 0)
+					reap_io_uring_cq(worker, 1);
+				
 			}
+
 			reaped += ret;
-			worker->io_completed += ret;
 			worker->free_io_units_rdma += ret;
 		}
 	} while (ret);
@@ -585,6 +621,7 @@ void *do_io_user_rdma(void *arg) {
 	struct ibv_send_wr wr, *bad_wr;
 	struct ibv_sge sgl;
 	struct ibv_wc wc[POLL_BATCH];
+	struct stat st;
 	unsigned int offset = 0;
 
 	if (rdma_setup(worker))
@@ -628,6 +665,33 @@ void *do_io_user_rdma(void *arg) {
 		return NULL;
 	}
 
+	/* setup io_uring stuff */
+	worker->fd = open(test_file.data(), O_DIRECT | O_RDWR | O_CREAT, 0644);
+	if (worker->fd < 0) {
+		perror("open");
+		goto err;
+	}
+
+	if (fstat(worker->fd, &st)) {
+		perror("fstat");
+		goto err;
+	}
+
+	if (st.st_size != file_size) {
+		printf("resizing test file %s, original size is %luB, setting to %luB\n", test_file.data(), st.st_size, file_size);
+		if (fallocate(worker->fd, 0, 0, file_size)) {
+			perror("fallocate");
+			goto err;
+		}
+	}
+
+	memset(&worker->params, 0, sizeof(worker->params));
+	if (io_uring_queue_init_params(io_uring_queue_depth, &worker->ring, &worker->params)) {
+		perror("io_uring_queue_init_params");
+		goto err;
+	}
+
+	/* setup rdma stuff */
 	sgl.length = bs;
 	sgl.lkey = worker->data_pool_mr->lkey;
 	wr.opcode = IBV_WR_RDMA_READ;
@@ -642,13 +706,20 @@ void *do_io_user_rdma(void *arg) {
 		int ret;
 		sgl.addr = worker->data_pool + offset;
 		wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
+		wr.wr_id = worker->data_pool + offset;
 		offset += bs;
 		if (offset >= worker->rmt_buf.size)
 			offset = 0;
 		
+		worker->rdma_wr_posted++;
 		if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
-			printf("ibv_post_send: %s, ret = %d\n", strerror(ret), ret);
+			printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
 			goto err;
+		}
+
+		if (worker->rdma_wr_posted % RDMA_REAP_FREQ == 0) {
+			if (reap_rdma_cq(worker, 0, wc))
+				goto err;
 		}
 
 		worker->free_io_units_rdma--;
@@ -676,6 +747,7 @@ struct io_worker *launch_worker(int cpu) {
 	memset(worker, 0, sizeof(worker));
 	worker->free_io_units_io_uring = io_uring_queue_depth;
 	worker->free_io_units_rdma = rdma_queue_depth;
+	worker->rdma_wr_posted = 0;
 	worker->worker_id = 0;
 	worker->stopped = false;
 	if (!client) {
@@ -728,7 +800,7 @@ void *calculate_stats(void *arg) {
 int parse_args(int argc, char *argv[]) {
 	argparse::ArgumentParser program;
 	program.add_argument("-bs").help("block size for each I/O in KB").default_value(4).scan<'i', int>();
-	program.add_argument("-file").help("test file on which we do the I/Os").default_value(std::string(""));
+	program.add_argument("-file").help("test file on which we do the I/Os").default_value(std::string("/mnt/test"));
 	program.add_argument("-iouring-qd").help("io_uring queue sq depth").default_value(128).scan<'i', int>();
 	program.add_argument("-rdma-qd").help("rdma queue depth").default_value(128).scan<'i', int>();
 	program.add_argument("-runtime").help("runtime of the benchmark").default_value(30).scan<'i', int>();
@@ -766,10 +838,6 @@ int parse_args(int argc, char *argv[]) {
 		printf("%s\n", program.help().str().data());
 		return 1;
 	}
-
-	// if (test_file == "") {
-	// 	printf("no test file given\n");
-	// }
 
 	return 0;
 }
