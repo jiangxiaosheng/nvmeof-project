@@ -23,7 +23,7 @@ const unsigned MB = 1024 * 1024;
 const unsigned long GB = 1024 * 1024 * 1024;
 const unsigned PAGESIZE = 4096;
 const int POLL_BATCH = 16;
-const int RDMA_REAP_FREQ = 256;
+const int RDMA_REAP_FREQ = 16;
 
 using namespace std::chrono;
 
@@ -173,7 +173,7 @@ void *do_io_io_uring(void *arg) {
 		io_uring_prep_write(sqe, worker->fd, data_buffer, bs, worker->cur_offset);
 		// printf("fd %d, data_buffer %p, bs %d, offset %lu\n", worker->fd, data_buffer, bs, worker->cur_offset);
 		worker->cur_offset += bs;
-		if (worker->cur_offset >= file_size)
+		if (worker->cur_offset + bs >= file_size)
 			worker->cur_offset = 0;
 		worker->free_io_units_io_uring--;
 
@@ -702,13 +702,15 @@ void *do_io_user_rdma(void *arg) {
 	wr.next = NULL;
 
 	worker->start_time = system_clock::now();
+	// printf("remote data buffer size = %d\n", worker->rmt_buf.size);
 	while (!runtime_exceeded(worker->start_time)) {
 		int ret;
 		sgl.addr = worker->data_pool + offset;
 		wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
 		wr.wr_id = worker->data_pool + offset;
 		offset += bs;
-		if (offset >= worker->rmt_buf.size)
+		// printf("offset: %d, buf size: %d\n", offset, worker->rmt_buf.size);
+		if (offset + bs >= worker->rmt_buf.size)
 			offset = 0;
 		
 		worker->rdma_wr_posted++;
@@ -723,7 +725,6 @@ void *do_io_user_rdma(void *arg) {
 		}
 
 		worker->free_io_units_rdma--;
-		
 		if (worker->free_io_units_rdma == 0) {
 			if (reap_rdma_cq(worker, 1, wc) < 0)
 				goto err;
