@@ -127,9 +127,10 @@ void *do_io_io_uring(void *arg) {
 	struct stat st;
 	void *data_buffer;
 	decltype(system_clock::now()) start;
+	struct iovec iovecs;
 	int ret;
 	
-	worker->fd = open(test_file.data(), O_DIRECT | O_RDWR | O_CREAT, 0644);
+	worker->fd = open(test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
 	if (worker->fd < 0) {
 		perror("open");
 		goto err;
@@ -168,9 +169,12 @@ void *do_io_io_uring(void *arg) {
 			sqe = io_uring_get_sqe(&worker->ring);
 			if (sqe != NULL)
 				break;
-			reap_io_uring_cq(worker, 0);
+			if (reap_io_uring_cq(worker, 0) < 0)
+				goto err;
 		} while (true);
-		io_uring_prep_write(sqe, worker->fd, data_buffer, bs, worker->cur_offset);
+		iovecs.iov_len = bs;
+		iovecs.iov_base = data_buffer;
+		io_uring_prep_writev(sqe, worker->fd, &iovecs, 1, worker->cur_offset);
 		// printf("fd %d, data_buffer %p, bs %d, offset %lu\n", worker->fd, data_buffer, bs, worker->cur_offset);
 		worker->cur_offset += bs;
 		if (worker->cur_offset + bs >= file_size)
@@ -185,13 +189,16 @@ void *do_io_io_uring(void *arg) {
 					worker->io_uring_sqe_queued -= ret;
 				} else {
 					printf("im busy\n"); // debugging
-					reap_io_uring_cq(worker, 0);
+					if (reap_io_uring_cq(worker, 0) < 0)
+						goto err;
 				}
 			}
 		}
 
 		if (worker->free_io_units_io_uring == 0) {
-			reap_io_uring_cq(worker, 1);
+			if (reap_io_uring_cq(worker, 1) < 0)
+				goto err;
+			// printf("free io units: %d\n", worker->free_io_units_io_uring);
 		}
 	}
 	
@@ -519,6 +526,7 @@ int reap_rdma_cq(struct io_worker *worker, int min, struct ibv_wc *wc) {
 	void *ev_ctx;
 	unsigned reaped = 0;
 	struct io_uring_sqe *sqe;
+	struct iovec iovecs;
 	int ret;
 
 again:
@@ -556,13 +564,17 @@ again:
 					sqe = io_uring_get_sqe(&worker->ring);
 					if (sqe != NULL)
 						break;
-					reap_io_uring_cq(worker, 0);
+					if (reap_io_uring_cq(worker, 0) < 0)
+						return -1;
 				} while (true);
-
-				io_uring_prep_write(sqe, worker->fd, (void *) wc[i].wr_id,
-						bs, worker->cur_offset);
+				
+				iovecs.iov_len = bs;
+				iovecs.iov_base = (void *) wc[i].wr_id;
+				io_uring_prep_writev(sqe, worker->fd, &iovecs, 1, worker->cur_offset);
+				printf("iovec len: %d, iov_base: %p, file cur offset: %lu\n", 
+					iovecs.iov_len, iovecs.iov_base, worker->cur_offset);
 				worker->cur_offset += bs;
-				if (worker->cur_offset >= file_size)
+				if (worker->cur_offset + bs >= file_size)
 					worker->cur_offset = 0;
 				worker->free_io_units_io_uring--;
 
@@ -576,13 +588,17 @@ again:
 							worker->io_uring_sqe_queued -= sqe_submitted;
 						} else {
 							printf("im busy\n"); // debugging
-							reap_io_uring_cq(worker, 0);
+							if (reap_io_uring_cq(worker, 0) < 0)
+								return -1;
 						}
 					}
 				}
 
-				if (worker->free_io_units_io_uring == 0)
-					reap_io_uring_cq(worker, 1);
+				if (worker->free_io_units_io_uring == 0) {
+					printf("no free io units, reaping...\n");
+					if (reap_io_uring_cq(worker, 1) < 0)
+						return -1;
+				}
 				
 			}
 
@@ -666,7 +682,7 @@ void *do_io_user_rdma(void *arg) {
 	}
 
 	/* setup io_uring stuff */
-	worker->fd = open(test_file.data(), O_DIRECT | O_RDWR | O_CREAT, 0644);
+	worker->fd = open(test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
 	if (worker->fd < 0) {
 		perror("open");
 		goto err;
@@ -707,7 +723,7 @@ void *do_io_user_rdma(void *arg) {
 		int ret;
 		sgl.addr = worker->data_pool + offset;
 		wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
-		wr.wr_id = worker->data_pool + offset;
+		wr.wr_id = worker->rmt_buf.addr + offset;
 		offset += bs;
 		// printf("offset: %d, buf size: %d\n", offset, worker->rmt_buf.size);
 		if (offset + bs >= worker->rmt_buf.size)
@@ -720,7 +736,7 @@ void *do_io_user_rdma(void *arg) {
 		}
 
 		if (worker->rdma_wr_posted % RDMA_REAP_FREQ == 0) {
-			if (reap_rdma_cq(worker, 0, wc))
+			if (reap_rdma_cq(worker, 0, wc) < 0)
 				goto err;
 		}
 
