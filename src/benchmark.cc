@@ -56,7 +56,7 @@ struct io_worker {
 	unsigned io_uring_sqe_queued;
 	unsigned long rdma_wr_posted;
 	unsigned long cur_offset;
-	unsigned long io_completed; // for io_uring only
+	volatile unsigned long io_completed; // for io_uring only
 	unsigned long free_io_units_io_uring;
 	unsigned long free_io_units_rdma;
 	pthread_t tid;
@@ -64,6 +64,8 @@ struct io_worker {
 	int fd;
 	bool stopped;
 	decltype(system_clock::now()) start_time;
+
+	void *data_buf;
 
 	/* rdma stuff */
 	struct rdma_cm_id *cm_id, *cm_listen_id;
@@ -101,6 +103,7 @@ inline bool runtime_exceeded(decltype(system_clock::now()) start) {
 
 int reap_io_uring_cq(struct io_worker *worker, int min) {
 	struct io_uring_cqe *cqe;
+	struct io_uring_sqe *sqe;
 	unsigned head;
 	unsigned reaped = 0;
 
@@ -113,7 +116,18 @@ int reap_io_uring_cq(struct io_worker *worker, int min) {
 			io_uring_cqe_seen(&worker->ring, cqe);
 			reaped++;
 			worker->io_completed++;
-			worker->free_io_units_io_uring++;
+			//worker->free_io_units_io_uring++;
+
+			sqe = io_uring_get_sqe(&worker->ring);
+			if (!sqe) {
+				printf("null io_uring sqe\n");
+				return -1;
+			}
+			io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
+			worker->cur_offset += bs;
+			if (worker->cur_offset + bs >= file_size)
+				worker->cur_offset = 0;
+			worker->io_uring_sqe_queued++;
 		}
 	} while (reaped < min);
 
@@ -127,10 +141,11 @@ void *do_io_io_uring(void *arg) {
 	struct stat st;
 	void *data_buffer;
 	decltype(system_clock::now()) start;
-	struct iovec iovecs;
+	struct io_uring_sqe *sqe;
 	int ret;
+	std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id);
 	
-	worker->fd = open(test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
+	worker->fd = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
 	if (worker->fd < 0) {
 		perror("open");
 		goto err;
@@ -155,51 +170,38 @@ void *do_io_io_uring(void *arg) {
 		goto err;
 	}
 
-	data_buffer = memalign(PAGESIZE, bs);
-	if (!data_buffer) {
+	worker->data_buf = memalign(PAGESIZE, bs);
+	if (!worker->data_buf) {
 		perror("memalign");
 		goto err;
 	}
 
 	worker->start_time = system_clock::now();
-	while (!runtime_exceeded(worker->start_time)) {
-		struct io_uring_sqe *sqe;
-		
-		do {
-			sqe = io_uring_get_sqe(&worker->ring);
-			if (sqe != NULL)
-				break;
-			if (reap_io_uring_cq(worker, 0) < 0)
-				goto err;
-		} while (true);
-		iovecs.iov_len = bs;
-		iovecs.iov_base = data_buffer;
-		io_uring_prep_writev(sqe, worker->fd, &iovecs, 1, worker->cur_offset);
-		// printf("fd %d, data_buffer %p, bs %d, offset %lu\n", worker->fd, data_buffer, bs, worker->cur_offset);
+
+	while (worker->io_uring_sqe_queued < io_uring_queue_depth) {
+		sqe = io_uring_get_sqe(&worker->ring);
+		io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
 		worker->cur_offset += bs;
 		if (worker->cur_offset + bs >= file_size)
 			worker->cur_offset = 0;
-		worker->free_io_units_io_uring--;
-
 		worker->io_uring_sqe_queued++;
-		if (worker->io_uring_sqe_queued == io_uring_batch_submit) {
-			while (worker->io_uring_sqe_queued != 0) {
-				ret = io_uring_submit(&worker->ring);
-				if (ret > 0) {
-					worker->io_uring_sqe_queued -= ret;
-				} else {
-					printf("im busy\n"); // debugging
-					if (reap_io_uring_cq(worker, 0) < 0)
-						goto err;
-				}
+	}
+	while (!runtime_exceeded(worker->start_time)) {
+		while (worker->io_uring_sqe_queued != 0) {
+			ret = io_uring_submit(&worker->ring);
+			if (ret > 0) {
+				worker->io_uring_sqe_queued -= ret;
+			} else {
+				printf("im busy\n"); // debugging
+				goto err;
 			}
 		}
 
-		if (worker->free_io_units_io_uring == 0) {
-			if (reap_io_uring_cq(worker, 1) < 0)
-				goto err;
-			// printf("free io units: %d\n", worker->free_io_units_io_uring);
-		}
+		/* guarantee we reaped and generated exactly 'queue_depth' sqes */
+		if (reap_io_uring_cq(worker, io_uring_queue_depth) != io_uring_queue_depth) {
+			printf("sqe number mismatch\n");
+			goto err;
+		}		
 	}
 	
 	worker->stopped = true;
@@ -527,7 +529,19 @@ int reap_rdma_cq(struct io_worker *worker, int min, struct ibv_wc *wc) {
 	unsigned reaped = 0;
 	struct io_uring_sqe *sqe;
 	struct iovec iovecs;
+	struct ibv_sge sgl;
+	struct ibv_send_wr wr, *bad_wr;
+	unsigned int offset = 0;
 	int ret;
+
+	sgl.length = bs;
+	sgl.lkey = worker->data_pool_mr->lkey;
+	wr.opcode = IBV_WR_RDMA_READ;
+	wr.send_flags = IBV_SEND_SIGNALED;
+	wr.wr.rdma.rkey = worker->rmt_buf.rkey;
+	wr.sg_list = &sgl;
+	wr.num_sge = 1;
+	wr.next = NULL;
 
 again:
 	if (event) {
@@ -546,7 +560,7 @@ again:
 	}
 
 	do {
-		ret = ibv_poll_cq(worker->cq, POLL_BATCH, wc);
+		ret = ibv_poll_cq(worker->cq, rdma_queue_depth, wc);
 		if (ret < 0) {
 			perror("ibv_poll_cq");
 			return -1;
@@ -560,50 +574,33 @@ again:
 					return -1;
 				}
 
-				do {
-					sqe = io_uring_get_sqe(&worker->ring);
-					if (sqe != NULL)
-						break;
-					if (reap_io_uring_cq(worker, 0) < 0)
-						return -1;
-				} while (true);
+				sgl.addr = worker->data_pool + offset;
+				wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
+				offset += bs;
+				if (offset + bs >= worker->rmt_buf.size)
+					offset = 0;
 				
-				iovecs.iov_len = bs;
-				iovecs.iov_base = (void *) wc[i].wr_id;
-				io_uring_prep_writev(sqe, worker->fd, &iovecs, 1, worker->cur_offset);
-				printf("iovec len: %d, iov_base: %p, file cur offset: %lu\n", 
-					iovecs.iov_len, iovecs.iov_base, worker->cur_offset);
+				if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
+					printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
+					return -1;
+				}
+
+				// printf("%d\n", i);
+
+				sqe = io_uring_get_sqe(&worker->ring);
+				if (!sqe) {
+					printf("null io_uring sqe, sqe queued: %d\n", worker->io_uring_sqe_queued);
+					return -1;
+				}
+				io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
 				worker->cur_offset += bs;
 				if (worker->cur_offset + bs >= file_size)
 					worker->cur_offset = 0;
-				worker->free_io_units_io_uring--;
-
 				worker->io_uring_sqe_queued++;
-
-				if (worker->io_uring_sqe_queued == io_uring_batch_submit) {
-					int sqe_submitted;
-					while (worker->io_uring_sqe_queued != 0) {
-						sqe_submitted = io_uring_submit(&worker->ring);
-						if (sqe_submitted > 0) {
-							worker->io_uring_sqe_queued -= sqe_submitted;
-						} else {
-							printf("im busy\n"); // debugging
-							if (reap_io_uring_cq(worker, 0) < 0)
-								return -1;
-						}
-					}
-				}
-
-				if (worker->free_io_units_io_uring == 0) {
-					printf("no free io units, reaping...\n");
-					if (reap_io_uring_cq(worker, 1) < 0)
-						return -1;
-				}
-				
 			}
 
 			reaped += ret;
-			worker->free_io_units_rdma += ret;
+			//worker->free_io_units_rdma += ret;
 		}
 	} while (ret);
 
@@ -612,7 +609,23 @@ again:
 
 	if (event)
 		ibv_ack_cq_events(worker->cq, reaped);
-	return 0;
+
+	while (worker->io_uring_sqe_queued != 0) {
+		ret = io_uring_submit(&worker->ring);
+		if (ret > 0) {
+			worker->io_uring_sqe_queued -= ret;
+		} else {
+			printf("im busy\n"); // debugging
+			return -1;
+		}
+	}
+
+	if (reap_io_uring_cq(worker, io_uring_queue_depth) != io_uring_queue_depth) {
+		printf("sqe number mismatch\n");
+		return -1;
+	}
+	
+	return reaped;
 }
 
 void rdma_client_terminate(struct io_worker *worker) {
@@ -636,9 +649,16 @@ void *do_io_user_rdma(void *arg) {
 	struct io_worker *worker = (struct io_worker *) arg;
 	struct ibv_send_wr wr, *bad_wr;
 	struct ibv_sge sgl;
-	struct ibv_wc wc[POLL_BATCH];
+	struct ibv_wc wc[rdma_queue_depth];
 	struct stat st;
+	struct io_uring_sqe *sqe;
+	struct io_uring_cqe *cqe;
 	unsigned int offset = 0;
+	int reaped = 0;
+	unsigned head;
+	int ret;
+	int rdma_polled;
+	std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id);
 
 	if (rdma_setup(worker))
 		goto err;
@@ -682,7 +702,7 @@ void *do_io_user_rdma(void *arg) {
 	}
 
 	/* setup io_uring stuff */
-	worker->fd = open(test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
+	worker->fd = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
 	if (worker->fd < 0) {
 		perror("open");
 		goto err;
@@ -699,6 +719,12 @@ void *do_io_user_rdma(void *arg) {
 			perror("fallocate");
 			goto err;
 		}
+	}
+
+	worker->data_buf = memalign(PAGESIZE, bs);
+	if (!worker->data_buf) {
+		perror("memalign");
+		goto err;
 	}
 
 	memset(&worker->params, 0, sizeof(worker->params));
@@ -718,14 +744,11 @@ void *do_io_user_rdma(void *arg) {
 	wr.next = NULL;
 
 	worker->start_time = system_clock::now();
-	// printf("remote data buffer size = %d\n", worker->rmt_buf.size);
-	while (!runtime_exceeded(worker->start_time)) {
-		int ret;
+	
+	while (worker->rdma_wr_posted < rdma_queue_depth) {
 		sgl.addr = worker->data_pool + offset;
 		wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
-		wr.wr_id = worker->rmt_buf.addr + offset;
 		offset += bs;
-		// printf("offset: %d, buf size: %d\n", offset, worker->rmt_buf.size);
 		if (offset + bs >= worker->rmt_buf.size)
 			offset = 0;
 		
@@ -734,16 +757,71 @@ void *do_io_user_rdma(void *arg) {
 			printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
 			goto err;
 		}
+	}
+	
+	while (!runtime_exceeded(worker->start_time)) {
+		rdma_polled = ibv_poll_cq(worker->cq, rdma_queue_depth, wc);
+		if (rdma_polled < 0) {
+			perror("ibv_poll_cq");
+			goto err;
+		} else if (rdma_polled == 0) {
+			continue;
+		} else {
+			// printf("ret %d\n", ret);
+			for (int i = 0; i < rdma_polled; i++) {
+				if (wc[i].status != IBV_WC_SUCCESS) {
+					printf("cq completion %d status: %d(%s), %d, %d\n",
+						i, wc[i].status, ibv_wc_status_str(wc[i].status), rdma_polled, POLL_BATCH);
+					goto err;
+				}
 
-		if (worker->rdma_wr_posted % RDMA_REAP_FREQ == 0) {
-			if (reap_rdma_cq(worker, 0, wc) < 0)
-				goto err;
-		}
+				sgl.addr = worker->data_pool + offset;
+				wr.wr.rdma.remote_addr = worker->rmt_buf.addr + offset;
+				offset += bs;
+				if (offset + bs >= worker->rmt_buf.size)
+					offset = 0;
+				
+				if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
+					printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
+					goto err;
+				}
 
-		worker->free_io_units_rdma--;
-		if (worker->free_io_units_rdma == 0) {
-			if (reap_rdma_cq(worker, 1, wc) < 0)
-				goto err;
+				sqe = io_uring_get_sqe(&worker->ring);
+				if (!sqe) {
+					printf("null io_uring sqe, sqe queued: %d\n", worker->io_uring_sqe_queued);
+					goto err;
+				}
+				io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
+				worker->cur_offset += bs;
+				if (worker->cur_offset + bs >= file_size)
+					worker->cur_offset = 0;
+				worker->io_uring_sqe_queued++;
+
+				if (worker->io_uring_sqe_queued == io_uring_queue_depth) {
+					while (worker->io_uring_sqe_queued != 0) {
+						ret = io_uring_submit(&worker->ring);
+						if (ret > 0) {
+							worker->io_uring_sqe_queued -= ret;
+						} else {
+							printf("im busy\n"); // debugging
+							goto err;
+						}
+					}
+
+					while (reaped != io_uring_queue_depth) {
+						io_uring_for_each_cqe(&worker->ring, head, cqe) {
+							if (cqe->res < 0) {
+								printf("io_uring cqe error: %s\n", strerror(-cqe->res));
+								goto err;
+							}
+							io_uring_cqe_seen(&worker->ring, cqe);
+							reaped++;
+							worker->io_completed++;
+						}
+					}
+					reaped = 0;
+				}
+			}
 		}
 	}
 
@@ -760,21 +838,28 @@ err:
 /* create a worker thread on the specified cpu */
 struct io_worker *launch_worker(int cpu) {
 	struct io_worker *worker = (struct io_worker *) malloc(sizeof(struct io_worker));
+	int ret;
 
 	memset(worker, 0, sizeof(worker));
 	worker->free_io_units_io_uring = io_uring_queue_depth;
 	worker->free_io_units_rdma = rdma_queue_depth;
 	worker->rdma_wr_posted = 0;
-	worker->worker_id = 0;
+	worker->worker_id = cpu;
 	worker->stopped = false;
 	if (!client) {
 		worker->data_pool_size = 32 * 1024 * 1024;
 	}
 
 	if (user_rdma)
-		pthread_create(&worker->tid, NULL, do_io_user_rdma, (void *) worker);
+		ret = pthread_create(&worker->tid, NULL, do_io_user_rdma, (void *) worker);
 	else
-		pthread_create(&worker->tid, NULL, do_io_io_uring, (void *) worker);
+		ret = pthread_create(&worker->tid, NULL, do_io_io_uring, (void *) worker);
+
+	if (ret) {
+		perror("pthread_create");
+		return NULL;
+	}
+
 	if (set_worker_cpu(worker, cpu)) {
 		free(worker);
 		return NULL;
@@ -785,25 +870,24 @@ struct io_worker *launch_worker(int cpu) {
 
 /* no need to prevent race condition as the accurate numer will be calculated when it terminates */
 void *calculate_stats(void *arg) {
-	struct io_worker *worker = (struct io_worker *) (arg);
-	unsigned io_completed;
+	struct io_worker **workers = (struct io_worker **) (arg);
+	unsigned long io_completed = 0;
 	double thru;
 	unsigned kiops;
 	unsigned duration_ms;
 
-	printf("bs=%ldB, io_uring_queue_depth=%d, test_file=%s, io_uring_batch_submit=%d, event=%d\n\n",
-		bs, io_uring_queue_depth, test_file.data(), io_uring_batch_submit, event);
-
 	if (user_rdma && !client)
 		return NULL;
 
-	while (!worker->stopped) {
-		io_completed = worker->io_completed;
-		duration_ms = duration_cast<milliseconds>(system_clock::now() - worker->start_time).count();
+	while (!workers[0]->stopped) {
+		io_completed = 0;
+		for (int i = 0; i < num_workers; i++) {
+			io_completed += workers[i]->io_completed;
+		}
+		duration_ms = duration_cast<milliseconds>(system_clock::now() - workers[0]->start_time).count();
 		if (io_completed == 0 || duration_ms == 0)
 			continue;
 
-		// printf("io_completed %lu, duration_ms %d\n", io_completed, duration_ms);
 		thru = 1.0 * io_completed * bs / MB / duration_ms * 1000;
 		kiops = io_completed / duration_ms;
 		printf("\rthroughput: %f MB/s (%dK IOPS)\n", thru, kiops);
@@ -822,13 +906,14 @@ int parse_args(int argc, char *argv[]) {
 	program.add_argument("-rdma-qd").help("rdma queue depth").default_value(128).scan<'i', int>();
 	program.add_argument("-runtime").help("runtime of the benchmark").default_value(30).scan<'i', int>();
 	program.add_argument("-filesize").help("size of the test file in GB").default_value(10).scan<'i', int>();
-	program.add_argument("-iouring-batch-submit").help("io_uring sqe submission batch").default_value(32).scan<'i', int>();
-	program.add_argument("-rdma-batch-submit").help("rdma wqe submittion batch").default_value(32).scan<'i', int>();
+	//program.add_argument("-iouring-batch-submit").help("io_uring sqe submission batch").default_value(32).scan<'i', int>();
+	//program.add_argument("-rdma-batch-submit").help("rdma wqe submittion batch").default_value(32).scan<'i', int>();
 	program.add_argument("-client").help("rdma io_uring client").default_value(false).implicit_value(true);
 	program.add_argument("-host").help("host address for rdma").default_value(std::string("10.10.1.2"));
 	program.add_argument("-port").help("port number for rdma").default_value(9876).scan<'i', int>();
 	program.add_argument("-user-rdma").help("perform the userspace rdma benchmark, default is NVMeoF").default_value(false).implicit_value(true);
 	program.add_argument("-event").help("sleep on cq events, default is poll").default_value(false).implicit_value(true);
+	program.add_argument("-cores").help("number of io workers").default_value(1).scan<'i', int>();
 
 	if (argc == 1) {
 		printf("%s\n", program.help().str().data());
@@ -843,13 +928,14 @@ int parse_args(int argc, char *argv[]) {
 		io_uring_queue_depth = program.get<int>("-iouring-qd");
 		rdma_queue_depth = program.get<int>("-rdma-qd");
 		runtime = program.get<int>("-runtime");
-		io_uring_batch_submit = program.get<int>("-iouring-batch-submit");
-		rdma_batch_submit = program.get<int>("-rdma-batch-submit");
+		//io_uring_batch_submit = program.get<int>("-iouring-batch-submit");
+		//rdma_batch_submit = program.get<int>("-rdma-batch-submit");
 		client = program.get<bool>("-client");
 		host = program.get<std::string>("-host");
 		base_port = program.get<int>("-port");
 		user_rdma = program.get<bool>("-user-rdma");
 		event = program.get<bool>("-event");
+		num_workers = program.get<int>("-cores");
 	} catch (std::exception &e) {
 		printf("%s\n", e.what());
 		printf("%s\n", program.help().str().data());
@@ -861,15 +947,21 @@ int parse_args(int argc, char *argv[]) {
 
 
 int main(int argc, char *argv[]) {
-	struct io_worker *worker;
+	struct io_worker *workers[num_workers];
 	pthread_t monitor_thread;
 
 	if (parse_args(argc, argv))
 		return 1;
 	
-	worker = launch_worker(0);
-	monitor_thread = pthread_create(&monitor_thread, NULL, calculate_stats, (void *) worker);
+	for (int i = 0; i < num_workers; i++) {
+		workers[i] = launch_worker(i);
+	}
+	if (pthread_create(&monitor_thread, NULL, calculate_stats, (void *) workers)) {
+		perror("pthread_create");
+		return 1;
+	}
 
-	pthread_join(worker->tid, NULL);
+	for (int i = 0; i < num_workers; i++)
+		pthread_join(workers[i]->tid, NULL);
 	pthread_join(monitor_thread, NULL);
 }
