@@ -847,7 +847,7 @@ struct io_worker *launch_worker(int cpu) {
 	worker->worker_id = cpu;
 	worker->stopped = false;
 	if (!client) {
-		worker->data_pool_size = 32 * 1024 * 1024;
+		worker->data_pool_size = 16 * 1024 * 1024;
 	}
 
 	if (user_rdma)

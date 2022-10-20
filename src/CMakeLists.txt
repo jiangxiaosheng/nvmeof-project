@@ -4,8 +4,8 @@ project(nvmeof)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_BUILD_TYPE RelWithDebugInfo)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
