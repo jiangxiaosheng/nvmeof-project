@@ -1,0 +1,14 @@
+======== 1 core ==========
+nvme/rdma non-offloading: 2251 MB/s
+nvme/rdma offloading: 
+userspace rdma: 2002 MB/s, cpu 1.7+4.6+0.7=7
+
+======== 2 core ==========
+nvme/rdma non-offloading: 2251 MB/s
+nvme/rdma offloading: 
+userspace rdma: 1770 MB/s, cpu 2+7.6+0.6=10.2
+
+======== 3 core ==========
+nvme/rdma non-offloading: 2251 MB/s
+nvme/rdma offloading: 
+userspace rdma: 2181 MB/s, cpu 2+6+1=9

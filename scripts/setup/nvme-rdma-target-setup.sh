@@ -17,7 +17,7 @@ sudo mkdir namespaces/1
 cd namespaces/1/
 
 # set the path of the nvme device, default is /dev/nvme0n1 (in cloudlab m510 machines)
-sudo echo -n /dev/nvme1n1 | sudo tee -a device_path > /dev/null
+sudo echo -n /dev/nvme0n1 | sudo tee -a device_path > /dev/null
 echo 1 | sudo tee -a enable > /dev/null
 
 

@@ -147,7 +147,7 @@ void *do_io_io_uring(void *arg) {
 	}
 
 	if (st.st_size != file_size) {
-		printf("resizing test file %s, original size is %luB, setting to %luB\n", test_file.data(), st.st_size, file_size);
+		printf("resizing test file %s, original size is %luB, setting to %luB\n", my_test_file.data(), st.st_size, file_size);
 		if (fallocate(worker->fd, 0, 0, file_size)) {
 			perror("fallocate");
 			goto err;
@@ -182,11 +182,11 @@ void *do_io_io_uring(void *arg) {
 
 		ret = io_uring_wait_cqe(&worker->ring, &cqe);
 		if (ret < 0) {
-			perror("io_uring_wait_cqe");
+			printf("io_uring_wait_cqe: %s\n", strerror(-ret));
 			goto err;
 		}
 		if (cqe->res < 0) {
-			printf("io_uring cqe error: %s\n", strerror(-cqe->res));
+			printf("worker %d, io_uring cqe error: %s\n", worker->worker_id, strerror(-cqe->res));
 			goto err;
 		}
 		io_uring_cqe_seen(&worker->ring, cqe);
@@ -231,6 +231,8 @@ int get_next_channel_event(struct io_worker *worker,
 int rdma_handshake(struct io_worker *worker) {
 	struct rdma_conn_param conn_param;
 	struct ibv_device_attr dev_attr;
+	struct ibv_qp_init_attr init_attr;
+	struct ibv_qp_attr attr;
 	int ret;
 
 	if (ibv_query_device(worker->cm_id->verbs, &dev_attr)) {
@@ -261,6 +263,17 @@ int rdma_handshake(struct io_worker *worker) {
 
 		if (get_next_channel_event(worker, RDMA_CM_EVENT_ESTABLISHED))
 			return 1;
+		
+		if (ibv_query_qp(worker->qp, &attr, IBV_QP_STATE, &init_attr)) {
+			perror("ibv_query_qp");
+			return 1;
+		}
+		printf("current qp state: %d\n", attr.qp_state);
+		attr.min_rnr_timer = 1;
+		if (ibv_modify_qp(worker->qp, &attr, IBV_QP_MIN_RNR_TIMER)) {
+			perror("ibv_modify_qp");
+			return 1;
+		}
 
 		tmp_mr = ibv_reg_mr(worker->pd, (void *) &worker->rmt_buf, sizeof(worker->rmt_buf),
 						IBV_ACCESS_LOCAL_WRITE);
@@ -336,6 +349,17 @@ int rdma_handshake(struct io_worker *worker) {
 			return 1;
 
 		usleep(500000);
+
+		if (ibv_query_qp(worker->qp, &attr, IBV_QP_STATE, &init_attr)) {
+			perror("ibv_query_qp");
+			return 1;
+		}
+		printf("current qp state: %d\n", attr.qp_state);
+		attr.min_rnr_timer = 1;
+		if (ibv_modify_qp(worker->qp, &attr, IBV_QP_MIN_RNR_TIMER)) {
+			perror("ibv_modify_qp");
+			return 1;
+		}
 
 		worker->data_pool = (uint64_t) memalign(PAGESIZE, worker->data_pool_size);
 		if (!worker->data_pool) {
@@ -574,7 +598,7 @@ again:
 				return -1;
 			}
 			if (cqe->res < 0) {
-				printf("io_uring cqe error: %s\n", strerror(-cqe->res));
+				printf("worker %d, io_uring cqe error: %s\n", worker->worker_id, strerror(-cqe->res));
 				return -1;
 			}
 			io_uring_cqe_seen(&worker->ring, cqe);
@@ -721,8 +745,8 @@ void *do_io_user_rdma(void *arg) {
 			goto err;
 		}
 
-		if (reap_rdma_cq(worker, 1, wc) != 1) {
-			printf("reap_rdma_cq failed\n");
+		if ((ret = reap_rdma_cq(worker, 1, wc)) != 1) {
+			printf("reap_rdma_cq failed, ret %d\n", ret);
 			goto err;
 		}
 	}
@@ -748,6 +772,7 @@ struct io_worker *launch_worker(int cpu) {
 	worker->rdma_wr_posted = 0;
 	worker->worker_id = cpu;
 	worker->stopped = false;
+	worker->io_completed = 0;
 	if (!client) {
 		worker->data_pool_size = 256 * 1024 * 1024;
 	}
@@ -863,6 +888,7 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < num_workers; i++) {
 		workers[i] = launch_worker(i);
 	}
+
 	if (pthread_create(&monitor_thread, NULL, calculate_stats, (void *) workers)) {
 		perror("pthread_create");
 		return 1;
