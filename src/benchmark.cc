@@ -56,16 +56,19 @@ struct io_worker {
 	unsigned io_uring_sqe_queued;
 	unsigned long rdma_wr_posted;
 	unsigned long cur_offset;
-	volatile unsigned long io_completed; // for io_uring only
+	unsigned long io_completed; // for io_uring only
 	unsigned long free_io_units_io_uring;
 	unsigned long free_io_units_rdma;
 	pthread_t tid;
 	cpu_set_t cpuset;
-	int fd;
+	int *fds;
+	int num_files;
+	int cur_fd;
 	bool stopped;
 	decltype(system_clock::now()) start_time;
 
 	void *data_buf;
+	char notification_buf[32];
 
 	/* rdma stuff */
 	struct rdma_cm_id *cm_id, *cm_listen_id;
@@ -78,6 +81,7 @@ struct io_worker {
 	uint64_t data_pool;
 	uint32_t data_pool_size;
 	struct ibv_mr *data_pool_mr;
+	struct ibv_mr *notification_buf_mr;
 	struct sockaddr_in addr;
 	int port;
 };
@@ -133,30 +137,38 @@ void *do_io_io_uring(void *arg) {
 	struct io_uring_sqe *sqe;
 	struct io_uring_cqe *cqe;
 	int ret;
-	std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id);
+
+	for (int i = 0; i < worker->num_files; i++) {
+		std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id) + "-" + std::to_string(i);
 	
-	worker->fd = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
-	if (worker->fd < 0) {
-		perror("open");
-		goto err;
-	}
-
-	if (fstat(worker->fd, &st)) {
-		perror("fstat");
-		goto err;
-	}
-
-	if (st.st_size != file_size) {
-		printf("resizing test file %s, original size is %luB, setting to %luB\n", my_test_file.data(), st.st_size, file_size);
-		if (fallocate(worker->fd, 0, 0, file_size)) {
-			perror("fallocate");
+		worker->fds[i] = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
+		if (worker->fds[i] < 0) {
+			perror("open");
 			goto err;
+		}
+
+		if (fstat(worker->fds[i], &st)) {
+			perror("fstat");
+			goto err;
+		}
+
+		if (st.st_size != bs) {
+			printf("resizing test file %s, original size is %luB, setting to %luB\n", my_test_file.data(), st.st_size, bs);
+			if (fallocate(worker->fds[i], 0, 0, bs)) {
+				perror("fallocate");
+				goto err;
+			}
 		}
 	}
 
 	memset(&worker->params, 0, sizeof(worker->params));
 	if (io_uring_queue_init_params(io_uring_queue_depth, &worker->ring, &worker->params)) {
 		perror("io_uring_queue_init_params");
+		goto err;
+	}
+
+	if (ret = io_uring_register_files(&worker->ring, worker->fds, worker->num_files)) {
+		printf("io_uring_register_files: %s\n", strerror(-ret));
 		goto err;
 	}
 
@@ -169,10 +181,8 @@ void *do_io_io_uring(void *arg) {
 	worker->start_time = system_clock::now();
 	while (!runtime_exceeded(worker->start_time)) {
 		sqe = io_uring_get_sqe(&worker->ring);
-		io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
-		worker->cur_offset += bs;
-		if (worker->cur_offset + bs >= file_size)
-			worker->cur_offset = 0;
+		io_uring_prep_write(sqe, worker->fds[worker->cur_fd], worker->data_buf, bs, 0);
+		worker->cur_fd = (worker->cur_fd + 1) % worker->num_files;
 
 		ret = io_uring_submit(&worker->ring);
 		if (ret != 1) {
@@ -268,10 +278,13 @@ int rdma_handshake(struct io_worker *worker) {
 			perror("ibv_query_qp");
 			return 1;
 		}
-		printf("current qp state: %d\n", attr.qp_state);
 		attr.min_rnr_timer = 1;
 		if (ibv_modify_qp(worker->qp, &attr, IBV_QP_MIN_RNR_TIMER)) {
 			perror("ibv_modify_qp");
+			return 1;
+		}
+		if (ibv_query_qp(worker->qp, &attr, IBV_QP_RNR_RETRY, &init_attr)) {
+			perror("ibv_query_qp");
 			return 1;
 		}
 
@@ -320,6 +333,11 @@ int rdma_handshake(struct io_worker *worker) {
 
 		ibv_ack_cq_events(worker->cq, 1);
 
+		if (ibv_dereg_mr(tmp_mr)) {
+			perror("ibv_dereg_mr");
+			return 1;
+		}
+
 		worker->data_pool = (uint64_t) (unsigned long) memalign(PAGESIZE, worker->rmt_buf.size);
 		if (!worker->data_pool) {
 			perror("memalign");
@@ -354,10 +372,13 @@ int rdma_handshake(struct io_worker *worker) {
 			perror("ibv_query_qp");
 			return 1;
 		}
-		printf("current qp state: %d\n", attr.qp_state);
 		attr.min_rnr_timer = 1;
 		if (ibv_modify_qp(worker->qp, &attr, IBV_QP_MIN_RNR_TIMER)) {
 			perror("ibv_modify_qp");
+			return 1;
+		}
+		if (ibv_query_qp(worker->qp, &attr, IBV_QP_RNR_RETRY, &init_attr)) {
+			perror("ibv_query_qp");
 			return 1;
 		}
 
@@ -431,6 +452,13 @@ int rdma_handshake(struct io_worker *worker) {
 			return 1;
 		}
 
+	}
+
+	worker->notification_buf_mr = ibv_reg_mr(worker->pd, worker->notification_buf, 
+		sizeof(worker->notification_buf), IBV_ACCESS_LOCAL_WRITE);
+	if (!worker->notification_buf_mr) {
+		perror("ibv_reg_mr");
+		return 1;
 	}
 
 	return 0;
@@ -581,10 +609,8 @@ again:
 				printf("null io_uring sqe, sqe queued: %d\n", worker->io_uring_sqe_queued);
 				return -1;
 			}
-			io_uring_prep_write(sqe, worker->fd, worker->data_buf, bs, worker->cur_offset);
-			worker->cur_offset += bs;
-			if (worker->cur_offset + bs >= file_size)
-				worker->cur_offset = 0;
+			io_uring_prep_write(sqe, worker->fds[worker->cur_fd], worker->data_buf, bs, 0);
+			worker->cur_fd = (worker->cur_fd + 1) % worker->num_files;
 
 			ret = io_uring_submit(&worker->ring);
 			if (ret != 1) {
@@ -634,6 +660,120 @@ void rdma_client_terminate(struct io_worker *worker) {
 	}
 }
 
+/* send a notification to let client fetch data */
+int send_notification(struct io_worker *worker) {
+	struct ibv_send_wr send_wr, *send_bad_wr;
+	int ret;
+	void *ev_ctx;
+	struct ibv_cq *ev_cq;
+	struct ibv_wc notification_wc;
+	struct ibv_sge sgl;
+
+	sgl.addr = (uint64_t) worker->notification_buf;
+	sgl.length = sizeof(worker->notification_buf);
+	sgl.lkey = worker->notification_buf_mr->lkey;
+
+	send_wr.sg_list = &sgl;
+	send_wr.num_sge = 1;
+	send_wr.next = NULL;
+	send_wr.opcode = IBV_WR_SEND;
+	send_wr.send_flags = IBV_SEND_SIGNALED;
+
+	ret = ibv_post_send(worker->qp, &send_wr, &send_bad_wr);
+	if (ret) {
+		perror("ibv_post_send");
+		return 1;
+	}
+
+	if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+		perror("ibv_get_cq_event");
+		return 1;
+	}
+	if (ibv_req_notify_cq(worker->cq, 0)) {
+		perror("ibv_req_notify_cq");
+		return 1;
+	}
+	if (ev_cq != worker->cq) {
+		printf("unknown cq\n");
+		return 1;
+	}
+	do {
+		ret = ibv_poll_cq(worker->cq, 1, &notification_wc);
+		if (ret < 0) {
+			perror("ibv_poll_cq");
+			return 1;
+		}
+	} while (ret == 0);
+	if (notification_wc.status) {
+		printf("cq completion status: %s\n", ibv_wc_status_str(notification_wc.status));
+		return 1;
+	}
+
+	ibv_ack_cq_events(worker->cq, 1);
+
+	return 0;
+}
+
+int prepare_wait(struct io_worker *worker) {
+	struct ibv_recv_wr recv_wr, *recv_bad_wr;
+	int ret;
+	void *ev_ctx;
+	struct ibv_cq *ev_cq;
+	struct ibv_wc notification_wc;
+	struct ibv_sge sgl;
+
+	sgl.addr = (uint64_t) worker->notification_buf;
+	sgl.length = sizeof(worker->notification_buf);
+	sgl.lkey = worker->notification_buf_mr->lkey;
+
+	recv_wr.sg_list = &sgl;
+	recv_wr.num_sge = 1;
+	recv_wr.next = NULL;
+
+	ret = ibv_post_recv(worker->qp, &recv_wr, &recv_bad_wr);
+	if (ret) {
+		perror("ibv_post_recv");
+		return 1;
+	}
+
+	return 0;
+}
+
+int wait_notification(struct io_worker *worker) {
+	int ret;
+	void *ev_ctx;
+	struct ibv_cq *ev_cq;
+	struct ibv_wc notification_wc;
+
+	if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+		perror("ibv_get_cq_event");
+		return 1;
+	}
+	if (ibv_req_notify_cq(worker->cq, 0)) {
+		perror("ibv_req_notify_cq");
+		return 1;
+	}
+	if (ev_cq != worker->cq) {
+		printf("unknown cq\n");
+		return 1;
+	}
+	do {
+		ret = ibv_poll_cq(worker->cq, 1, &notification_wc);
+		if (ret < 0) {
+			perror("ibv_poll_cq");
+			return 1;
+		}
+	} while (ret == 0);
+	if (notification_wc.status) {
+		printf("cq completion status: %s\n", ibv_wc_status_str(notification_wc.status));
+		return 1;
+	}
+
+	ibv_ack_cq_events(worker->cq, 1);
+
+	return 0;
+}
+
 void *do_io_user_rdma(void *arg) {
 	struct io_worker *worker = (struct io_worker *) arg;
 	struct ibv_send_wr wr, *bad_wr;
@@ -647,7 +787,6 @@ void *do_io_user_rdma(void *arg) {
 	unsigned head;
 	int ret;
 	int rdma_polled;
-	std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id);
 
 	if (rdma_setup(worker))
 		goto err;
@@ -656,60 +795,48 @@ void *do_io_user_rdma(void *arg) {
 		goto err;
 
 	if (!client) {
-		struct ibv_recv_wr end_wr, *bad_wr;
-		struct ibv_cq *ev_cq;
-		void *ev_ctx;
-		
-		sgl.addr = worker->data_pool;
-		sgl.length = 4;
-		sgl.lkey = worker->data_pool_mr->lkey;
-
-		end_wr.sg_list = &sgl;
-		end_wr.num_sge = 1;
-		end_wr.next = NULL;
-
-		ibv_post_recv(worker->qp, &end_wr, &bad_wr);
-
-		if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
-			perror("ibv_get_cq_event");
-			goto err_server;
+		while (true) {
+			if (prepare_wait(worker))
+				goto err_server;
+			if (send_notification(worker))
+				goto err_server;
+			if (wait_notification(worker))
+				goto err_server;
 		}
-		if (ev_cq != worker->cq) {
-			printf("unknown cq\n");
-			goto err_server;
-		}
-		if (ibv_poll_cq(worker->cq, 1, wc) != 1) {
-			perror("ibv_poll_cq");
-			goto err_server;
-		}
-		ibv_ack_cq_events(worker->cq, 1);
-		
+
 		return NULL;
 	err_server:
 		pthread_exit((void *)1);
 		return NULL;
 	}
 
+	if (prepare_wait(worker))
+		goto err;
+
 	/* setup io_uring stuff */
-	worker->fd = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
-	if (worker->fd < 0) {
-		perror("open");
-		goto err;
-	}
-
-	if (fstat(worker->fd, &st)) {
-		perror("fstat");
-		goto err;
-	}
-
-	if (st.st_size != file_size) {
-		printf("resizing test file %s, original size is %luB, setting to %luB\n", test_file.data(), st.st_size, file_size);
-		if (fallocate(worker->fd, 0, 0, file_size)) {
-			perror("fallocate");
+	for (int i = 0; i < worker->num_files; i++) {
+		std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id) + "-" + std::to_string(i);
+		
+		worker->fds[i] = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
+		if (worker->fds[i] < 0) {
+			perror("open");
 			goto err;
 		}
-	}
 
+		if (fstat(worker->fds[i], &st)) {
+			perror("fstat");
+			goto err;
+		}
+
+		if (st.st_size != bs) {
+			printf("resizing test file %s, original size is %luB, setting to %luB\n", my_test_file.data(), st.st_size, bs);
+			if (fallocate(worker->fds[i], 0, 0, bs)) {
+				perror("fallocate");
+				goto err;
+			}
+		}
+	}
+	
 	worker->data_buf = memalign(PAGESIZE, bs);
 	if (!worker->data_buf) {
 		perror("memalign");
@@ -719,6 +846,11 @@ void *do_io_user_rdma(void *arg) {
 	memset(&worker->params, 0, sizeof(worker->params));
 	if (io_uring_queue_init_params(io_uring_queue_depth, &worker->ring, &worker->params)) {
 		perror("io_uring_queue_init_params");
+		goto err;
+	}
+
+	if (io_uring_register_files(&worker->ring, worker->fds, worker->num_files)) {
+		perror("io_uring_register_files");
 		goto err;
 	}
 
@@ -739,7 +871,12 @@ void *do_io_user_rdma(void *arg) {
 		offset += bs;
 		if (offset + bs >= worker->rmt_buf.size)
 			offset = 0;
-		
+
+		// auto start = system_clock::now();
+
+		if (wait_notification(worker))
+			goto err;
+
 		if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
 			printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
 			goto err;
@@ -749,6 +886,14 @@ void *do_io_user_rdma(void *arg) {
 			printf("reap_rdma_cq failed, ret %d\n", ret);
 			goto err;
 		}
+
+		if (prepare_wait(worker))
+			goto err;
+		if (send_notification(worker))
+			goto err;
+
+		// auto end = system_clock::now();
+		// printf("one round trip takes %ld us\n", duration_cast<microseconds>(end - start).count());
 	}
 
 	worker->stopped = true;
@@ -766,13 +911,16 @@ struct io_worker *launch_worker(int cpu) {
 	struct io_worker *worker = (struct io_worker *) malloc(sizeof(struct io_worker));
 	int ret;
 
-	memset(worker, 0, sizeof(worker));
+	memset(worker, 0, sizeof(struct io_worker));
 	worker->free_io_units_io_uring = io_uring_queue_depth;
 	worker->free_io_units_rdma = rdma_queue_depth;
 	worker->rdma_wr_posted = 0;
 	worker->worker_id = cpu;
 	worker->stopped = false;
 	worker->io_completed = 0;
+	worker->num_files = 256;
+	worker->cur_fd = 0;
+	worker->fds = new int[worker->num_files];
 	if (!client) {
 		worker->data_pool_size = 256 * 1024 * 1024;
 	}
@@ -805,6 +953,13 @@ void *calculate_stats(void *arg) {
 
 	if (user_rdma && !client)
 		return NULL;
+
+	for (int i = 0; i < num_workers; i++) {
+		if (workers[i] == NULL) {
+			printf("worker %d is null\n", i);
+			return NULL;
+		}
+	}
 
 	while (!workers[0]->stopped) {
 		io_completed = 0;
@@ -879,11 +1034,11 @@ int parse_args(int argc, char *argv[]) {
 
 
 int main(int argc, char *argv[]) {
-	struct io_worker *workers[num_workers];
-	pthread_t monitor_thread;
-
 	if (parse_args(argc, argv))
 		return 1;
+
+	struct io_worker *workers[num_workers];
+	pthread_t monitor_thread;
 	
 	for (int i = 0; i < num_workers; i++) {
 		workers[i] = launch_worker(i);

@@ -1,4 +1,0 @@
-========= 1 core ============
-nvme/rdma: 2254 MB/s, cpu 8 (io_uring worker)
-userspace-rdma: 2100 MB/s, cpu 9 (io_uring worker)
-
