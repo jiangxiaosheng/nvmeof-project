@@ -22,7 +22,7 @@ def parse_log(logfile):
 	total_cpu = 0.0
 	while i < len(content):
 		line = content[i]
-		if line.strip().startswith('Tasks'):
+		if line.strip().startswith('PID'):
 			# skip the first two top as metrics are not stable now
 			if skip < 2:
 				skip += 1
@@ -34,16 +34,13 @@ def parse_log(logfile):
 						break
 					line = content[i]
 					i += 1
-					if not line.startswith('%Cpu'):
-						continue
 					# do some processing
 					# '%Cpu114:  0.0 us,  0.0 sy,  0.0 ni,100.0 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st'
-					cols = line.split(',')
-					cpu = 0.0
-					for idx in range(len(cols)):
-						if idx == 3 or idx == 4:
-							continue
-						cpu += float(cols[idx].strip().split()[-2])
+					cols = line.split()
+					process = cols[-1]
+					cpu = cols[-4]
+					if process == 'top':
+						continue
 					total_cpu += float(cpu)
 
 		i += 1
@@ -53,15 +50,15 @@ def parse_log(logfile):
 def nvmeof():
 	# NVMe/RDMA
 	args = [benchmark_bin_path, '-file', '/nvme/test', '-runtime', '30', '-bs', '4', '-cores', '1']
-	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble/result-nvmeof-offloading-tmp.txt', 'w+')
-	for bs in [16]:
+	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble-2/result-nvmeof-nonoffloading.txt', 'w+')
+	for bs in [4, 16, 64, 512, 1024, 4096, 17408]:
 	# for bs in [17408]:
 		os.system('rm /nvme/test*')
 		os.system('ssh 10.10.1.2 "rm /nvme/test*"')
      
 		args[-3] = str(bs)
 		print('[bs=' + str(bs) + 'kB]')
-		for cores in [2, 3, 4, 5, 6]:
+		for cores in [1]:
 			print(' [cores=' + str(cores) + ']')
 			args[-1] = str(cores)
 		
@@ -83,7 +80,7 @@ def nvmeof():
 			peer_cmd = ' '.join(args)
 			for i in range(3):
 				logfile = f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}.txt'
-				out = Popen(f'top -b -1 > {logfile}', shell=True, preexec_fn=os.setsid)
+				out = Popen(f'top -b -H -1 > {logfile}', shell=True, preexec_fn=os.setsid)
 				# start the worker process on the peer
 				peer_worker = Popen(f'ssh 10.10.1.2 "{peer_cmd}"', shell=True)
 				benchmark = run(args, capture_output=True, text=True)
@@ -112,17 +109,17 @@ def nvmeof():
 def userspace_rdma():
 	args = [benchmark_bin_path, '-user-rdma', '-client', '-event', '-host', '10.10.1.2', '-file', '/mnt/test',
 			'-runtime', '30', '-bs', '4', '-cores', '1']
-	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble/result-rdma.txt', 'w+')
+	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble-2/result-rdma-2.txt', 'w+')
 	listener_cmd = f'{benchmark_bin_path} -host 10.10.1.1 -user-rdma -cores 6'
 	peer_listener_cmd = f'{benchmark_bin_path} -host 10.10.1.2 -user-rdma -cores 6'
  
-	for bs in [4, 16, 64, 512, 1024, 17408]:
+	for bs in [4, 16, 64, 512, 1024, 4096, 17408]:
 		os.system('rm /mnt/test*')
 		os.system('ssh 10.10.1.2 "rm /mnt/test*"')
   
 		args[-3] = str(bs)
 		print('[bs=' + str(bs) + 'kB]')
-		for cores in [1, 2, 3, 4, 5, 6]:
+		for cores in [1]:
 			print(' [cores=' + str(cores) + ']')
 			args[-1] = str(cores)
 
@@ -188,8 +185,8 @@ if __name__ == '__main__':
 	if not os.path.exists('logs/'):
 		os.mkdir('logs/')
 	
-	nvmeof()
-	# userspace_rdma()
+	# nvmeof()
+	userspace_rdma()
 	# peer_cmd = f'{benchmark_bin_path} -user-rdma -cores 3'
 	# Popen(f'ssh 10.10.1.2 "{peer_cmd}"', stdout=open('/dev/null'), shell=True)
 	# os.system(f'ssh 10.10.1.2 "pkill benchmark"')

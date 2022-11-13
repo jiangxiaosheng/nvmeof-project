@@ -4,8 +4,8 @@ project(nvmeof)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_BUILD_TYPE Debug)
-# set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_BUILD_TYPE Release)
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
@@ -77,7 +77,7 @@ endforeach()
 
 include_directories(third_party)
 
-link_directories(/users/sjiang/nvmeof-project/src/rdma-core/build/lib)
+link_directories(/users/sjiang/rdma-core/build/lib)
 
 add_executable(block_rw_nvmeof block_rw_nvmeof.cc)
 target_link_libraries(block_rw_nvmeof nvme)
