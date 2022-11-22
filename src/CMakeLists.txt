@@ -77,7 +77,7 @@ endforeach()
 
 include_directories(third_party)
 
-link_directories(/users/sjiang/rdma-core/build/lib)
+link_directories(/users/sjiang/nvmeof-project/src/rdma-core/build/lib)
 
 add_executable(block_rw_nvmeof block_rw_nvmeof.cc)
 target_link_libraries(block_rw_nvmeof nvme)

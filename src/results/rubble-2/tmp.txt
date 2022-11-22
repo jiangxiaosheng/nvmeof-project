@@ -1,0 +1,7 @@
+bs=4,cores=1,thru=79.09,cpu=44.29
+bs=16,cores=1,thru=223.30,cpu=39.22
+bs=64,cores=1,thru=623.84,cpu=30.43
+bs=512,cores=1,thru=1300.39,cpu=28.94
+bs=1024,cores=1,thru=1539.49,cpu=31.31
+bs=4096,cores=1,thru=2208.48,cpu=38.14
+bs=17408,cores=1,thru=2212.95,cpu=36.53

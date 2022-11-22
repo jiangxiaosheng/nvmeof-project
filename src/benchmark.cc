@@ -42,6 +42,7 @@ bool user_rdma;
 std::string host;
 int base_port;
 bool event;
+bool nt;
 
 struct rdma_rmt_buf {
 	uint64_t addr;
@@ -685,18 +686,21 @@ int send_notification(struct io_worker *worker) {
 		return 1;
 	}
 
-	if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
-		perror("ibv_get_cq_event");
-		return 1;
+	if (event) {
+		if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+			perror("ibv_get_cq_event");
+			return 1;
+		}
+		if (ibv_req_notify_cq(worker->cq, 0)) {
+			perror("ibv_req_notify_cq");
+			return 1;
+		}
+		if (ev_cq != worker->cq) {
+			printf("unknown cq\n");
+			return 1;
+		}
 	}
-	if (ibv_req_notify_cq(worker->cq, 0)) {
-		perror("ibv_req_notify_cq");
-		return 1;
-	}
-	if (ev_cq != worker->cq) {
-		printf("unknown cq\n");
-		return 1;
-	}
+	
 	do {
 		ret = ibv_poll_cq(worker->cq, 1, &notification_wc);
 		if (ret < 0) {
@@ -709,7 +713,8 @@ int send_notification(struct io_worker *worker) {
 		return 1;
 	}
 
-	ibv_ack_cq_events(worker->cq, 1);
+	if (event)
+		ibv_ack_cq_events(worker->cq, 1);
 
 	return 0;
 }
@@ -745,18 +750,21 @@ int wait_notification(struct io_worker *worker) {
 	struct ibv_cq *ev_cq;
 	struct ibv_wc notification_wc;
 
-	if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
-		perror("ibv_get_cq_event");
-		return 1;
+	if (event) {
+		if (ibv_get_cq_event(worker->comp_channel, &ev_cq, &ev_ctx)) {
+			perror("ibv_get_cq_event");
+			return 1;
+		}
+		if (ibv_req_notify_cq(worker->cq, 0)) {
+			perror("ibv_req_notify_cq");
+			return 1;
+		}
+		if (ev_cq != worker->cq) {
+			printf("unknown cq\n");
+			return 1;
+		}
 	}
-	if (ibv_req_notify_cq(worker->cq, 0)) {
-		perror("ibv_req_notify_cq");
-		return 1;
-	}
-	if (ev_cq != worker->cq) {
-		printf("unknown cq\n");
-		return 1;
-	}
+	
 	do {
 		ret = ibv_poll_cq(worker->cq, 1, &notification_wc);
 		if (ret < 0) {
@@ -769,7 +777,8 @@ int wait_notification(struct io_worker *worker) {
 		return 1;
 	}
 
-	ibv_ack_cq_events(worker->cq, 1);
+	if (event)
+		ibv_ack_cq_events(worker->cq, 1);
 
 	return 0;
 }
@@ -796,12 +805,16 @@ void *do_io_user_rdma(void *arg) {
 
 	if (!client) {
 		while (true) {
-			if (prepare_wait(worker))
-				goto err_server;
-			if (send_notification(worker))
-				goto err_server;
-			if (wait_notification(worker))
-				goto err_server;
+			if (nt) {
+				if (prepare_wait(worker))
+					goto err_server;
+				if (send_notification(worker))
+					goto err_server;
+				if (wait_notification(worker))
+					goto err_server;
+			} else {
+				sleep(10000);
+			}
 		}
 
 		return NULL;
@@ -874,8 +887,10 @@ void *do_io_user_rdma(void *arg) {
 
 		// auto start = system_clock::now();
 
-		if (wait_notification(worker))
-			goto err;
+		if (nt) {
+			if (wait_notification(worker))
+				goto err;
+		}
 
 		if ((ret = ibv_post_send(worker->qp, &wr, &bad_wr)) != 0) {
 			printf("ibv_post_send: %s, ret = %d, wr_posted = %ld\n", strerror(ret), ret, worker->rdma_wr_posted);
@@ -887,10 +902,12 @@ void *do_io_user_rdma(void *arg) {
 			goto err;
 		}
 
-		if (prepare_wait(worker))
-			goto err;
-		if (send_notification(worker))
-			goto err;
+		if (nt) {
+			if (prepare_wait(worker))
+				goto err;
+			if (send_notification(worker))
+				goto err;
+		}
 
 		// auto end = system_clock::now();
 		// printf("one round trip takes %ld us\n", duration_cast<microseconds>(end - start).count());
@@ -1001,6 +1018,7 @@ int parse_args(int argc, char *argv[]) {
 	program.add_argument("-user-rdma").help("perform the userspace rdma benchmark, default is NVMeoF").default_value(false).implicit_value(true);
 	program.add_argument("-event").help("sleep on cq events, default is poll").default_value(false).implicit_value(true);
 	program.add_argument("-cores").help("number of io workers").default_value(1).scan<'i', int>();
+	program.add_argument("-nt").help("whether to apply the notification mechanism").default_value(false).implicit_value(true);
 
 	if (argc == 1) {
 		printf("%s\n", program.help().str().data());
@@ -1023,6 +1041,7 @@ int parse_args(int argc, char *argv[]) {
 		user_rdma = program.get<bool>("-user-rdma");
 		event = program.get<bool>("-event");
 		num_workers = program.get<int>("-cores");
+		nt = program.get<bool>("-nt");
 	} catch (std::exception &e) {
 		printf("%s\n", e.what());
 		printf("%s\n", program.help().str().data());

@@ -1,6 +1,7 @@
-bs=4,cores=1,thru=54.31,cpu=48.74
-bs=16,cores=1,thru=198.34,cpu=44.09
-bs=64,cores=1,thru=605.07,cpu=33.54
-bs=512,cores=1,thru=1534.49,cpu=13.14
-bs=1024,cores=1,thru=1728.12,cpu=9.91
-bs=17408,cores=1,thru=2189.74,cpu=7.28
+bs=4,cores=1,thru=52.79,cpu=47.26
+bs=16,cores=1,thru=195.50,cpu=43.11
+bs=64,cores=1,thru=586.15,cpu=32.75
+bs=512,cores=1,thru=1489.42,cpu=14.36
+bs=1024,cores=1,thru=1768.52,cpu=10.75
+bs=4096,cores=1,thru=2224.30,cpu=8.50
+bs=17408,cores=1,thru=2237.22,cpu=10.67
