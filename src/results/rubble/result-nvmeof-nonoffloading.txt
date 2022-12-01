@@ -1,36 +1,7 @@
-bs=4,cores=1,thru=82.90,cpu=26.01
-bs=4,cores=2,thru=166.65,cpu=55.87
-bs=4,cores=3,thru=253.99,cpu=76.55
-bs=4,cores=4,thru=340.37,cpu=108.24
-bs=4,cores=5,thru=422.42,cpu=131.78
-bs=4,cores=6,thru=501.26,cpu=161.20
-bs=16,cores=1,thru=249.44,cpu=22.76
-bs=16,cores=2,thru=477.65,cpu=49.92
-bs=16,cores=3,thru=705.96,cpu=71.20
-bs=16,cores=4,thru=907.42,cpu=97.74
-bs=16,cores=5,thru=1135.93,cpu=114.07
-bs=16,cores=6,thru=1323.87,cpu=142.43
-bs=64,cores=1,thru=702.91,cpu=19.23
-bs=64,cores=2,thru=1278.87,cpu=46.10
-bs=64,cores=3,thru=1699.03,cpu=58.16
-bs=64,cores=4,thru=2123.62,cpu=79.70
-bs=64,cores=5,thru=2247.17,cpu=81.66
-bs=64,cores=6,thru=2249.93,cpu=77.35
-bs=512,cores=1,thru=2218.33,cpu=39.63
-bs=512,cores=2,thru=2251.39,cpu=43.43
-bs=512,cores=3,thru=2251.34,cpu=43.38
-bs=512,cores=4,thru=2251.70,cpu=45.69
-bs=512,cores=5,thru=2251.68,cpu=46.57
-bs=512,cores=6,thru=2251.68,cpu=48.46
-bs=1024,cores=1,thru=2235.09,cpu=38.46
-bs=1024,cores=2,thru=2252.76,cpu=40.76
-bs=1024,cores=3,thru=2250.73,cpu=41.80
-bs=1024,cores=4,thru=2251.97,cpu=43.65
-bs=1024,cores=5,thru=2250.94,cpu=55.34
-bs=1024,cores=6,thru=2250.08,cpu=51.93
-bs=17408,cores=1,thru=2250.39,cpu=34.14
-bs=17408,cores=2,thru=2249.24,cpu=39.53
-bs=17408,cores=3,thru=2250.16,cpu=43.12
-bs=17408,cores=4,thru=2248.57,cpu=45.33
-bs=17408,cores=5,thru=2249.48,cpu=46.16
-bs=17408,cores=6,thru=2249.53,cpu=48.45
+bs=4,cores=1,thru=177.91(worker1:80.62414233333334, worker2: 97.28438133333334),cpu=77.21(worker1:44.896296296296306, worker2: 32.31851851851854)
+bs=16,cores=1,thru=487.18(worker1:225.81266166666668, worker2: 261.3710533333333),cpu=70.84(worker1:40.396296296296306, worker2: 30.444444444444457)
+bs=64,cores=1,thru=1315.39(worker1:633.528314, worker2: 681.8632516666667),cpu=65.70(worker1:34.340740740740756, worker2: 31.359259259259264)
+bs=512,cores=1,thru=2880.37(worker1:1313.2575630000001, worker2: 1567.1077189999999),cpu=54.82(worker1:27.466666666666672, worker2: 27.355555555555558)
+bs=1024,cores=1,thru=3476.04(worker1:1540.1459853333333, worker2: 1935.8978206666668),cpu=57.00(worker1:29.19259259259259, worker2: 27.807407407407414)
+bs=4096,cores=1,thru=4434.02(worker1:2243.631458, worker2: 2190.390490333333),cpu=73.93(worker1:36.948148148148164, worker2: 36.9814814814815)
+bs=17408,cores=1,thru=4472.82(worker1:2243.2129213333333, worker2: 2229.604659),cpu=69.49(worker1:34.61111111111113, worker2: 34.87777777777779)

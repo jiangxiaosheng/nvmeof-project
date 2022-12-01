@@ -1,36 +1,7 @@
-bs=4,cores=1,thru=99.76,cpu=15.86
-bs=4,cores=2,thru=195.84,cpu=36.66
-bs=4,cores=3,thru=280.21,cpu=70.33
-bs=4,cores=4,thru=375.55,cpu=97.73
-bs=4,cores=5,thru=462.84,cpu=117.51
-bs=4,cores=6,thru=540.92,cpu=147.63
-bs=16,cores=1,thru=268.12,cpu=12.06
-bs=16,cores=2,thru=504.00,cpu=31.59
-bs=16,cores=3,thru=730.38,cpu=53.71
-bs=16,cores=4,thru=946.37,cpu=70.29
-bs=16,cores=5,thru=1138.94,cpu=88.56
-bs=16,cores=6,thru=1330.79,cpu=97.46
-bs=64,cores=1,thru=720.88,cpu=13.55
-bs=64,cores=2,thru=1344.51,cpu=24.09
-bs=64,cores=3,thru=1753.35,cpu=34.68
-bs=64,cores=4,thru=2200.47,cpu=45.59
-bs=64,cores=5,thru=2222.45,cpu=43.88
-bs=64,cores=6,thru=2226.29,cpu=48.81
-bs=512,cores=1,thru=2209.94,cpu=12.25
-bs=512,cores=2,thru=2224.31,cpu=15.09
-bs=512,cores=3,thru=2226.96,cpu=14.73
-bs=512,cores=4,thru=2208.46,cpu=14.26
-bs=512,cores=5,thru=2236.12,cpu=16.72
-bs=512,cores=6,thru=2235.77,cpu=15.97
-bs=1024,cores=1,thru=2240.41,cpu=11.93
-bs=1024,cores=2,thru=2242.60,cpu=12.99
-bs=1024,cores=3,thru=2235.76,cpu=13.73
-bs=1024,cores=4,thru=2236.52,cpu=15.71
-bs=1024,cores=5,thru=2240.52,cpu=20.90
-bs=1024,cores=6,thru=2237.80,cpu=16.23
-bs=17408,cores=1,thru=2239.41,cpu=9.36
-bs=17408,cores=2,thru=2234.36,cpu=10.34
-bs=17408,cores=3,thru=2237.62,cpu=11.10
-bs=17408,cores=4,thru=2239.07,cpu=11.03
-bs=17408,cores=5,thru=2241.14,cpu=11.70
-bs=17408,cores=6,thru=2298.02,cpu=9.67
+bs=4,cores=1,thru=213.29(worker1:102.24858366666666, worker2: 111.038815),cpu=63.26(worker1:36.13333333333333, worker2: 27.129629629629637)
+bs=16,cores=1,thru=572.02(worker1:282.6983696666667, worker2: 289.31697866666667),cpu=46.24(worker1:26.666666666666675, worker2: 19.570370370370373)
+bs=64,cores=1,thru=1559.88(worker1:820.5813806666666, worker2: 739.3006266666666),cpu=38.70(worker1:20.737037037037037, worker2: 17.966666666666665)
+bs=512,cores=1,thru=4481.35(worker1:2245.267296, worker2: 2236.0823356666665),cpu=29.78(worker1:15.159259259259265, worker2: 14.618518518518513)
+bs=1024,cores=1,thru=4491.11(worker1:2244.739680333333, worker2: 2246.3698783333334),cpu=25.29(worker1:12.78888888888889, worker2: 12.499999999999998)
+bs=4096,cores=1,thru=4491.17(worker1:2245.739524666667, worker2: 2245.433942),cpu=21.00(worker1:10.703703703703697, worker2: 10.29629629629629)
+bs=17408,cores=1,thru=4478.19(worker1:2243.4765223333334, worker2: 2234.715157666667),cpu=18.99(worker1:9.496296296296292, worker2: 9.49259259259259)

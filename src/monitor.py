@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import os
-from subprocess import Popen, run
+from subprocess import Popen, run, DEVNULL
 import signal
 import re
 from time import sleep
@@ -50,133 +50,203 @@ def parse_log(logfile):
 def nvmeof():
 	# NVMe/RDMA
 	args = [benchmark_bin_path, '-file', '/nvme/test', '-runtime', '30', '-bs', '4', '-cores', '1']
-	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble-2/tmp-2.txt', 'w+')
-	for bs in [4]:
-	# for bs in [17408]:
-		os.system('rm /nvme/test*')
+	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble/result-nvmeof-nonoffloading-2.txt', 'w+')
+	logdir = '/users/sjiang/nvmeof-project/src/build/'
+	worker1_out_file = 'worker1.out'
+	worker2_out_file = 'worker2.out'
+	for bs in [4, 16, 64, 512, 1024, 4096, 17408]:
 		os.system('ssh 10.10.1.1 "rm /nvme/test*"')
+		os.system('ssh 10.10.1.2 "rm /nvme/test*"')
      
 		args[-3] = str(bs)
 		print('[bs=' + str(bs) + 'kB]')
 		for cores in [1]:
 			print(' [cores=' + str(cores) + ']')
-			args[-1] = str(cores)
+			# args[-1] = str(cores)
 		
-			total_thru = 0.0
-			total_cpu = 0.0
+			worker1_total_thru = 0.0
+			worker1_total_cpu = 0.0
+			worker2_total_thru = 0.0
+			worker2_total_cpu = 0.0
    
 			# warm up
-			args[-5] = '10'
-			peer_cmd = ' '.join(args)
-			peer_worker = Popen(f'ssh 10.10.1.1 "{peer_cmd}"', shell=True)
-			benchmark = run(args, capture_output=True, text=True)
+			args[-5] = '5'
+			cmd = ' '.join(args)
+			worker1 = Popen(f'ssh 10.10.1.1 "{cmd}"', shell=True, stdout=DEVNULL)
+			worker2 = Popen(f'ssh 10.10.1.2 "{cmd}"', shell=True, stdout=DEVNULL)
 
-			peer_worker.terminate()
-			os.system('pkill -9 benchmark')
+			worker1.wait()
+			worker2.wait()
 			os.system(f'ssh 10.10.1.1 "pkill -9 benchmark"')
-			sleep(3)
+			os.system(f'ssh 10.10.1.2 "pkill -9 benchmark"')
+			sleep(2)
    
 			args[-5] = '30'
-			peer_cmd = ' '.join(args)
+			cmd = ' '.join(args)
 			for i in range(3):
-				logfile = f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}.txt'
-				out = Popen(f'top -b -H -1 > {logfile}', shell=True, preexec_fn=os.setsid)
-				# start the worker process on the peer
-				peer_worker = Popen(f'ssh 10.10.1.1 "{peer_cmd}"', shell=True)
-				benchmark = run(args, capture_output=True, text=True)
+				logfile = os.path.join(logdir, f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}.txt')
+				out1 = Popen(f'ssh 10.10.1.1 "top -b -H -1 > {logfile}"', shell=True, stderr=DEVNULL)
+				worker1 = Popen(f'ssh 10.10.1.1 "{cmd}"', shell=True, stdout=open(worker1_out_file, 'w'))
+				out2 = Popen(f'ssh 10.10.1.2 "top -b -H -1 > {logfile}"', shell=True, stderr=DEVNULL)
+				worker2 = Popen(f'ssh 10.10.1.2 "{cmd}"', shell=True, stdout=open(worker2_out_file, 'w'))
 
-				os.killpg(os.getpgid(out.pid), signal.SIGTERM)
-				peer_worker.terminate()
+				worker1.wait()
+				worker2.wait()
+				out1.terminate()
+				out2.terminate()
 
-				last_record = benchmark.stdout.splitlines()[-1]
-				thru = re.search(r'(\d+\.\d+) (MB/s)', last_record).groups()
-				total_thru += float(thru[0])
-				avg_cpu = parse_log(logfile)
-				total_cpu += avg_cpu
-				# clean the env
-				os.system('pkill -9 benchmark')
-				os.system('pkill -9 top')
-				os.system(f'ssh 10.10.1.1 "pkill -9 benchmark"')
-				sleep(3)
+				os.system('ssh 10.10.1.1 "pkill -9 top"')
+				os.system('ssh 10.10.1.1 "pkill -9 benchmark"')
+				os.system('ssh 10.10.1.2 "pkill -9 top"')
+				os.system('ssh 10.10.1.2 "pkill -9 benchmark"')
+				sleep(1)
+				
 
+				worker1_logfile = f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}-worker1.txt'
+				worker1_top = Popen(f'ssh 10.10.1.1 "cat {logfile}"', shell=True, 
+                        stdout=open(worker1_logfile, 'w'))
+				worker1_top.wait()
+				worker1_avg_cpu = parse_log(worker1_logfile)
+				worker1_total_cpu += worker1_avg_cpu
+				worker1_last_record = open(worker1_out_file, 'r').readlines()[-1]
+				worker1_thru = float(re.search(r'(\d+\.\d+) (MB/s)', worker1_last_record).groups()[0])
+				worker1_total_thru += worker1_thru
+				print('worker1', 'thru:', worker1_thru, 'cpu:', worker1_avg_cpu)
+
+				worker2_logfile = f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}-worker2.txt'
+				worker2_top = Popen(f'ssh 10.10.1.2 "cat {logfile}"', shell=True,
+                        stdout=open(worker2_logfile, 'w'))
+				worker2_top.wait()
+				worker2_avg_cpu = parse_log(worker2_logfile)
+				worker2_total_cpu += worker2_avg_cpu
+				worker2_last_record = open(worker2_out_file, 'r').readlines()[-1]
+				worker2_thru = float(re.search(r'(\d+\.\d+) (MB/s)', worker2_last_record).groups()[0])
+				worker2_total_thru += worker2_thru
+				print('worker2', 'thru:', worker2_thru, 'cpu:', worker2_avg_cpu)	
+
+
+			total_cpu = worker1_total_cpu + worker2_total_cpu
+			total_thru = worker1_total_thru + worker2_total_thru
 			print(f' thru: {total_thru / 3:.2f}')
 			print(f' avg cpu: {total_cpu / 3:.2f}')
-			result_file.write(f'bs={bs},cores={cores},thru={total_thru / 3:.2f},cpu={total_cpu / 3:.2f}\n')
+			result_file.write(f"bs={bs},cores={cores},thru={total_thru / 3:.2f}"
+       				f"(worker1:{worker1_total_thru / 3}, worker2: {worker2_total_thru / 3}),"
+                    f"cpu={total_cpu / 3:.2f}"
+                    f"(worker1:{worker1_total_cpu / 3}, worker2: {worker2_total_cpu / 3})\n")
 			result_file.flush()
 		print()
 
 
 def userspace_rdma():
-	args = [benchmark_bin_path, '-user-rdma', '-client', '-event', '-host', '10.10.1.1', '-file', '/mnt/test',
+	worker1_args = [benchmark_bin_path, '-user-rdma', '-client', '-event', '-nt', '-host', '10.10.1.2', '-file', '/mnt/test',
 			'-runtime', '30', '-bs', '4', '-cores', '1']
-	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble-2/result-rdma-2.txt', 'w+')
-	listener_cmd = f'{benchmark_bin_path} -host 10.10.1.2 -user-rdma -cores 6'
-	peer_listener_cmd = f'{benchmark_bin_path} -host 10.10.1.1 -user-rdma -cores 6'
+	worker2_args = [benchmark_bin_path, '-user-rdma', '-client', '-event', '-nt', '-host', '10.10.1.1', '-file', '/mnt/test',
+			'-runtime', '30', '-bs', '4', '-cores', '1']
+	result_file = open('/users/sjiang/nvmeof-project/src/results/rubble/result-rdma-2.txt', 'w+')
+	worker1_listener_cmd = f'{benchmark_bin_path} -host 10.10.1.1 -user-rdma -event -nt -cores 6'
+	worker2_listener_cmd = f'{benchmark_bin_path} -host 10.10.1.2 -user-rdma -event -nt -cores 6'
+	logdir = '/users/sjiang/nvmeof-project/src/build/'
+	worker1_out_file = 'worker1.out'
+	worker2_out_file = 'worker2.out'
  
 	for bs in [4, 16, 64, 512, 1024, 4096, 17408]:
-		os.system('rm /mnt/test*')
 		os.system('ssh 10.10.1.1 "rm /mnt/test*"')
+		os.system('ssh 10.10.1.2 "rm /mnt/test*"')
   
-		args[-3] = str(bs)
+		worker1_args[-3] = str(bs)
+		worker2_args[-3] = str(bs)
 		print('[bs=' + str(bs) + 'kB]')
 		for cores in [1]:
 			print(' [cores=' + str(cores) + ']')
-			args[-1] = str(cores)
+			worker1_args[-1] = str(cores)
+			worker2_args[-1] = str(cores)
 
-			total_thru = 0.0
-			total_cpu = 0.0
+			worker1_total_thru = 0.0
+			worker1_total_cpu = 0.0
+			worker2_total_thru = 0.0
+			worker2_total_cpu = 0.0
 
 			# warm up
-			peer_listener = Popen(f'ssh 10.10.1.1 "{peer_listener_cmd}"', stdout=open('/dev/null'), shell=True)
-			my_listener = Popen(listener_cmd, stdout=open('/dev/null'), shell=True)
+			worker1_listener = Popen(f'ssh 10.10.1.1 "{worker1_listener_cmd}"', stdout=DEVNULL, shell=True)
+			worker2_listener = Popen(f'ssh 10.10.1.2 "{worker2_listener_cmd}"', stdout=DEVNULL, shell=True)
 			sleep(1)
-			args[-5] = '10'
-			peer_args = args.copy()
-			peer_args[5] = "10.10.1.2"
-			peer_benchmark = Popen(f'ssh 10.10.1.1 "{" ".join(peer_args)}"', shell=True, preexec_fn=os.setsid)
-			my_benchmark = run(args, capture_output=True, text=True)
+			worker1_args[-5] = '5'
+			worker2_args[-5] = '5'
+			worker1_benchmark = Popen(f'ssh 10.10.1.1 "{" ".join(worker1_args)}"', shell=True, stdout=DEVNULL)
+			worker2_benchmark = Popen(f'ssh 10.10.1.2 "{" ".join(worker2_args)}"', shell=True, stdout=DEVNULL)
 
-			os.killpg(os.getpgid(peer_benchmark.pid), signal.SIGTERM)
-			peer_listener.terminate()
-			my_listener.terminate()
-			os.system('pkill -9 benchmark')
-			os.system('pkill -9 top')
-			os.system(f'ssh 10.10.1.1 "pkill -9 benchmark"')
+			
+			worker1_benchmark.wait()
+			worker2_benchmark.wait()
+			worker1_listener.terminate()
+			worker2_listener.terminate()
+   
+			os.system('ssh 10.10.1.1 "pkill -9 benchmark"')
+			os.system('ssh 10.10.1.1 "pkill -9 top"')
+			os.system('ssh 10.10.1.2 "pkill -9 benchmark"')
+			os.system('ssh 10.10.1.2 "pkill -9 top"')
 			sleep(3)
 
-			args[-5] = '30'
+			worker1_args[-5] = '30'
+			worker2_args[-5] = '30'
 			for i in range(3):
-				peer_listener = Popen(f'ssh 10.10.1.1 "{peer_listener_cmd}"', stdout=open('/dev/null'), shell=True)
-				my_listener = Popen(listener_cmd, stdout=open('/dev/null'), shell=True)
+				worker1_listener = Popen(f'ssh 10.10.1.1 "{worker1_listener_cmd}"', stdout=DEVNULL, shell=True)
+				worker2_listener = Popen(f'ssh 10.10.1.2 "{worker2_listener_cmd}"', stdout=DEVNULL, shell=True)
 				sleep(1)
-				peer_args = args.copy()
-				peer_args[5] = "10.10.1.2"
+
+				worker1_cmd = ' '.join(worker1_args)
+				worker2_cmd = ' '.join(worker2_args)
     
-				logfile = f'logs/rdma-bs-{bs}-cores-{cores}-{i}.txt'
-				out = Popen(f'top -b -1 > {logfile}', shell=True, preexec_fn=os.setsid)
-				peer_benchmark = Popen(f'ssh 10.10.1.1 "{" ".join(peer_args)}"', shell=True, preexec_fn=os.setsid)
-				my_benchmark = run(args, capture_output=True, text=True)
+				logfile = os.path.join(logdir, f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}.txt')
+				out1 = Popen(f'ssh 10.10.1.1 "top -b -H -1 > {logfile}"', shell=True, stderr=DEVNULL)
+				worker1 = Popen(f'ssh 10.10.1.1 "{worker1_cmd}"', shell=True, stdout=open(worker1_out_file, 'w'),
+                    stderr=DEVNULL)
+				out2 = Popen(f'ssh 10.10.1.2 "top -b -H -1 > {logfile}"', shell=True, stderr=DEVNULL)
+				worker2 = Popen(f'ssh 10.10.1.2 "{worker2_cmd}"', shell=True, stdout=open(worker2_out_file, 'w'),
+                    stderr=DEVNULL)
 
-				os.killpg(os.getpgid(out.pid), signal.SIGTERM)
-				os.killpg(os.getpgid(peer_benchmark.pid), signal.SIGTERM)
-				peer_listener.terminate()
-				my_listener.terminate()
+				worker1.wait()
+				worker2.wait()
+				out1.terminate()
+				out2.terminate()
+				sleep(1)
+    
+				os.system('ssh 10.10.1.1 "pkill -9 top"')
+				os.system('ssh 10.10.1.1 "pkill -9 benchmark"')
+				os.system('ssh 10.10.1.2 "pkill -9 top"')
+				os.system('ssh 10.10.1.2 "pkill -9 benchmark"')
 
-				last_record = my_benchmark.stdout.splitlines()[-1]
-				thru = re.search(r'(\d+\.\d+) (MB/s)', last_record).groups()
-				total_thru += float(thru[0])
-				avg_cpu = parse_log(logfile)
-				total_cpu += avg_cpu
+				worker1_logfile = f'logs/rdma-bs-{bs}-cores-{cores}-{i}-worker1.txt'
+				worker1_top = Popen(f'ssh 10.10.1.1 "cat {logfile}"', shell=True, 
+                        stdout=open(worker1_logfile, 'w'))
+				worker1_top.wait()
+				worker1_avg_cpu = parse_log(worker1_logfile)
+				worker1_total_cpu += worker1_avg_cpu
+				worker1_last_record = open(worker1_out_file, 'r').readlines()[-1]
+				worker1_thru = float(re.search(r'(\d+\.\d+) (MB/s)', worker1_last_record).groups()[0])
+				worker1_total_thru += worker1_thru
+				print('worker1', 'thru:', worker1_thru, 'cpu:', worker1_avg_cpu)
 
-				# clean the env
-				os.system('pkill -9 benchmark')
-				os.system('pkill -9 top')
-				os.system(f'ssh 10.10.1.1 "pkill -9 benchmark"')
-				sleep(3)
+				worker2_logfile = f'logs/nvmeof-bs-{bs}-cores-{cores}-{i}-worker2.txt'
+				worker2_top = Popen(f'ssh 10.10.1.2 "cat {logfile}"', shell=True,
+                        stdout=open(worker2_logfile, 'w'))
+				worker2_top.wait()
+				worker2_avg_cpu = parse_log(worker2_logfile)
+				worker2_total_cpu += worker2_avg_cpu
+				worker2_last_record = open(worker2_out_file, 'r').readlines()[-1]
+				worker2_thru = float(re.search(r'(\d+\.\d+) (MB/s)', worker2_last_record).groups()[0])
+				worker2_total_thru += worker2_thru
+				print('worker2', 'thru:', worker2_thru, 'cpu:', worker2_avg_cpu)
 
+
+			total_cpu = worker1_total_cpu + worker2_total_cpu
+			total_thru = worker1_total_thru + worker2_total_thru
 			print(f' thru: {total_thru / 3:.2f}')
 			print(f' avg cpu: {total_cpu / 3:.2f}')
-			result_file.write(f'bs={bs},cores={cores},thru={total_thru / 3:.2f},cpu={total_cpu / 3:.2f}\n')
+			result_file.write(f"bs={bs},cores={cores},thru={total_thru / 3:.2f}"
+       				f"(worker1:{worker1_total_thru / 3}, worker2: {worker2_total_thru / 3}),"
+                    f"cpu={total_cpu / 3:.2f}"
+                    f"(worker1:{worker1_total_cpu / 3}, worker2: {worker2_total_cpu / 3})\n")
 			result_file.flush()
 		print()
 
@@ -185,8 +255,11 @@ if __name__ == '__main__':
 	if not os.path.exists('logs/'):
 		os.mkdir('logs/')
 	
-	nvmeof()
-	#userspace_rdma()
+	# r = Popen(f'ssh 10.10.1.1 "{benchmark_bin_path} -file /nvme/test -bs 4 -runtime 5"', shell=True, stdout=open('tmp', 'w'))
+	# r.wait()
+	# print(r.stdout)
+	# nvmeof()
+	userspace_rdma()
 	# peer_cmd = f'{benchmark_bin_path} -user-rdma -cores 3'
 	# Popen(f'ssh 10.10.1.2 "{peer_cmd}"', stdout=open('/dev/null'), shell=True)
 	# os.system(f'ssh 10.10.1.2 "pkill benchmark"')
