@@ -42,6 +42,7 @@ setup_as_host() {
 
     nvme discover -t tcp -a $target_ip -s 4420
     nvme connect -t tcp -n testsubsystem -a $target_ip -s 4420
+    sleep 5
     nvme list
 
     mkdir /mnt/remote-sst
