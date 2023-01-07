@@ -36,15 +36,19 @@ service File {
 	rpc SetParameters(Parameters) returns (ACK) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
+	rpc WriteFile(stream FileRequest) returns (stream FileReply) {}
 }
 
 message FileRequest {
 	bytes filename = 1;
 	bytes data = 2;
+	int32 file_num = 3;
 }
 
 message FileReply {
-	bytes stats = 1;
+	bool ok = 1;
+	bytes stats = 2;
+	bytes message = 3;
 }
 
 message Parameters {
