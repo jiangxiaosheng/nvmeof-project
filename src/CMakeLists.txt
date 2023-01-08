@@ -4,8 +4,8 @@ project(nvmeof)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_BUILD_TYPE Release)
- set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
@@ -68,22 +68,22 @@ target_link_libraries(grpc_proto
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})
 
-foreach(_target ${targets})
-    add_executable(${_target} "${_target}.cc")
-    target_link_libraries(${_target} PRIVATE ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF} grpc_proto ibverbs nvme uring)
-    # Cannot do this because these directories are not available during CMake "compile time"
-    # target_include_directories(${proto_hdrs} ${grpc_hdrs})
-endforeach()
+# foreach(_target ${targets})
+#     add_executable(${_target} "${_target}.cc")
+#     target_link_libraries(${_target} PRIVATE ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF} grpc_proto ibverbs nvme uring)
+#     # Cannot do this because these directories are not available during CMake "compile time"
+#     # target_include_directories(${proto_hdrs} ${grpc_hdrs})
+# endforeach()
 
 include_directories(third_party)
 
 link_directories(/users/sjiang/nvmeof-project/src/rdma-core/build/lib)
 
-add_executable(block_rw_nvmeof block_rw_nvmeof.cc)
-target_link_libraries(block_rw_nvmeof nvme)
+# add_executable(block_rw_nvmeof block_rw_nvmeof.cc)
+# target_link_libraries(block_rw_nvmeof nvme)
 
-add_executable(file_rw_nvmeof file_rw_nvmeof.cc)
-target_link_libraries(file_rw_nvmeof nvme uring pthread aio)
+# add_executable(file_rw_nvmeof file_rw_nvmeof.cc)
+# target_link_libraries(file_rw_nvmeof nvme uring pthread aio)
 
 add_executable(benchmark benchmark.cc)
 target_link_libraries(benchmark pthread uring rdmacm ibverbs grpc_proto)

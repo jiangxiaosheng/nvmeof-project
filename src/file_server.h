@@ -62,12 +62,13 @@ public:
         fn = params->nfiles();
         fds = new int[fn];
 
-        cout << "set params:\n" 
-            << "  buffer_size = " << buffer_size << "B\n"
-            << "  block_size = " << blk_size << "B\n"
-            << "  queue_depth = " << queue_depth << "\n"
-            << "  poll_threshold = " << poll_threshold << "\n"
-            << endl;
+        // cout << "set params:\n" 
+        //     << "  buffer_size = " << buffer_size << "B\n"
+        //     << "  block_size = " << blk_size << "B\n"
+        //     << "  queue_depth = " << queue_depth << "\n"
+        //     << "  poll_threshold = " << poll_threshold << "\n"
+        //     << "  fn = " << fn << "\n"
+        //     << endl;
 
         for (int i = 0; i < fn; i++) {
             std::string my_test_file = test_file_prefix + "-" + std::to_string(i);
@@ -179,89 +180,89 @@ public:
         return Status::OK;
     }
 
-  Status AppendOneLargeFileAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
-    decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring;
-    auto total_start = system_clock::now();
+    Status AppendOneLargeFileAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+        decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring;
+        auto total_start = system_clock::now();
 
-    struct io_uring ring;
-    struct io_uring_params uring_params;
-    memset(&uring_params, 0, sizeof(uring_params));
+        struct io_uring ring;
+        struct io_uring_params uring_params;
+        memset(&uring_params, 0, sizeof(uring_params));
 
-    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
-    if (ret) {
-        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
-        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+        int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
+        if (ret) {
+            fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+            return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+        }
+
+        thread cq_thread([=](struct io_uring *ring) {
+            int ret;
+            void *data;
+            for (int i = 0; i < N; i++) {
+                struct io_uring_cqe *cqe;
+                ret = io_uring_wait_cqe(ring, &cqe);
+                if (ret < 0) {
+                fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
+                return;
+                }
+                if (cqe->res < 0) {
+                fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
+                }
+                data = io_uring_cqe_get_data(cqe);
+                free(data);
+                io_uring_cqe_seen(ring, cqe);
+            }
+        }, &ring);
+
+        FileRequest request;
+        FileReply reply;
+        stream->Read(&request);
+
+        int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
+        if (fd < 0) {
+        perror("open failed");
+        return Status(StatusCode::UNKNOWN, "close fd failed");
+        }
+
+        do {
+            auto sqe = io_uring_get_sqe(&ring);
+            if (!sqe) {
+                perror("io_uring_get_sqe");
+                return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
+            }
+
+            auto copy_start = chrono::system_clock::now();
+            void *buffer;
+            if (posix_memalign(&buffer, blk_size, buffer_size)) {
+                perror("posix_memalign");
+                return Status(StatusCode::UNKNOWN, "posix_memalign failed");
+            }
+            memcpy(buffer, request.data().data(), buffer_size);
+            time_on_copy_uring += chrono::system_clock::now() - copy_start;
+
+            io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
+            io_uring_sqe_set_data(sqe, buffer);
+
+            io_uring_submit(&ring);
+        } while (stream->Read(&request));
+
+        cq_thread.join();
+
+        io_uring_queue_exit(&ring);
+        close(fd);
+
+        time_total_uring += std::chrono::system_clock::now() - total_start;
+
+        std::stringstream ss;
+        ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
+            << " ms\n" << "total time on server is "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
+            << " ms\n";
+        reply.set_stats(ss.str());
+        stream->Write(reply);
+        return Status::OK;
     }
 
-    thread cq_thread([=](struct io_uring *ring) {
-        int ret;
-        void *data;
-        for (int i = 0; i < N; i++) {
-            struct io_uring_cqe *cqe;
-            ret = io_uring_wait_cqe(ring, &cqe);
-            if (ret < 0) {
-            fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
-            return;
-            }
-            if (cqe->res < 0) {
-            fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
-            }
-            data = io_uring_cqe_get_data(cqe);
-            free(data);
-            io_uring_cqe_seen(ring, cqe);
-        }
-    }, &ring);
-
-    FileRequest request;
-    FileReply reply;
-    stream->Read(&request);
-
-    int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
-    if (fd < 0) {
-      perror("open failed");
-      return Status(StatusCode::UNKNOWN, "close fd failed");
-    }
-
-    do {
-        auto sqe = io_uring_get_sqe(&ring);
-        if (!sqe) {
-            perror("io_uring_get_sqe");
-            return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
-        }
-
-        auto copy_start = chrono::system_clock::now();
-        void *buffer;
-        if (posix_memalign(&buffer, blk_size, buffer_size)) {
-            perror("posix_memalign");
-            return Status(StatusCode::UNKNOWN, "posix_memalign failed");
-        }
-        memcpy(buffer, request.data().data(), buffer_size);
-        time_on_copy_uring += chrono::system_clock::now() - copy_start;
-
-        io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
-        io_uring_sqe_set_data(sqe, buffer);
-
-        io_uring_submit(&ring);
-    } while (stream->Read(&request));
-
-    cq_thread.join();
-
-    io_uring_queue_exit(&ring);
-    close(fd);
-
-    time_total_uring += std::chrono::system_clock::now() - total_start;
-
-    std::stringstream ss;
-    ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
-        << " ms\n" << "total time on server is "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
-        << " ms\n";
-    reply.set_stats(ss.str());
-    stream->Write(reply);
-    return Status::OK;
-  }
-
-  Status AppendOneLargeFileAsyncExpr(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    Status AppendOneLargeFileAsyncExpr(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
         decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring;
         auto total_start = system_clock::now();
 
@@ -351,167 +352,171 @@ public:
     }
   
 
-  Status AppendManySmallFilesAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
-    decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring, time_on_open_uring;
-    auto total_start = system_clock::now();
+    Status AppendManySmallFilesAsync(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+        decltype(std::chrono::system_clock::now()) time_on_copy_uring, time_total_uring, time_on_open_uring;
+        auto total_start = system_clock::now();
 
-    struct io_uring ring;
-    struct io_uring_params uring_params;
-    memset(&uring_params, 0, sizeof(uring_params));
+        struct io_uring ring;
+        struct io_uring_params uring_params;
+        memset(&uring_params, 0, sizeof(uring_params));
 
-    int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
-    if (ret) {
-        fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
-        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
-    }
-    
-    thread cq_thread([=](struct io_uring *ring) {
-      int ret;
-      void *data;
-      for (int i = 0; i < 2*N; i++) {
-        struct io_uring_cqe *cqe;
-        ret = io_uring_wait_cqe(ring, &cqe);
-        if (ret < 0) {
-          fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
-          return;
+        int ret = io_uring_queue_init_params(queue_depth, &ring, &uring_params);
+        if (ret) {
+            fprintf(stderr, "Unable to setup io_uring: %s\n", strerror(-ret));
+            return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
         }
-        if (cqe->res < 0) {
-          fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
+        
+        thread cq_thread([=](struct io_uring *ring) {
+        int ret;
+        void *data;
+        for (int i = 0; i < 2*N; i++) {
+            struct io_uring_cqe *cqe;
+            ret = io_uring_wait_cqe(ring, &cqe);
+            if (ret < 0) {
+            fprintf(stderr, "Error waiting for completion: %s\n", strerror(-ret));
+            return;
+            }
+            if (cqe->res < 0) {
+            fprintf(stderr, "Error in async operation: %s\n", strerror(-cqe->res));
+            }
+            data = io_uring_cqe_get_data(cqe);
+            if (data != nullptr) {
+            free(data);
+            }
+            io_uring_cqe_seen(ring, cqe);
         }
-        data = io_uring_cqe_get_data(cqe);
-        if (data != nullptr) {
-          free(data);
+        }, &ring);
+
+        FileRequest request;
+        FileReply reply;
+        stream->Read(&request);
+
+        do {
+        auto open_start = system_clock::now();
+        int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
+        if (fd < 0) {
+            perror("open failed");
+            return Status(StatusCode::UNKNOWN, "close fd failed");
         }
-        io_uring_cqe_seen(ring, cqe);
-      }
-      }, &ring);
+        time_on_open_uring += system_clock::now() - open_start;
 
-    FileRequest request;
-    FileReply reply;
-    stream->Read(&request);
+        auto sqe = io_uring_get_sqe(&ring);
+        while (!sqe) {
+                sqe = io_uring_get_sqe(&ring);
+            }
 
-    do {
-      auto open_start = system_clock::now();
-      int fd = open(request.filename().data(), O_APPEND | O_DIRECT | O_WRONLY | O_CREAT, 0644);
-      if (fd < 0) {
-        perror("open failed");
-        return Status(StatusCode::UNKNOWN, "close fd failed");
-      }
-      time_on_open_uring += system_clock::now() - open_start;
+        auto copy_start = chrono::system_clock::now();
+        void *buffer;
+                if (posix_memalign(&buffer, blk_size, buffer_size)) {
+            perror("posix_memalign");
+            return Status(StatusCode::UNKNOWN, "posix_memalign failed");
+        }
+                memcpy(buffer, request.data().data(), buffer_size);
+                time_on_copy_uring += chrono::system_clock::now() - copy_start;
 
-      auto sqe = io_uring_get_sqe(&ring);
-      while (!sqe) {
-              sqe = io_uring_get_sqe(&ring);
-          }
+        io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
+        io_uring_sqe_set_data(sqe, buffer);
+        sqe->flags |= IOSQE_IO_LINK;
 
-      auto copy_start = chrono::system_clock::now();
-      void *buffer;
-            if (posix_memalign(&buffer, blk_size, buffer_size)) {
-        perror("posix_memalign");
-        return Status(StatusCode::UNKNOWN, "posix_memalign failed");
-      }
-            memcpy(buffer, request.data().data(), buffer_size);
-            time_on_copy_uring += chrono::system_clock::now() - copy_start;
-
-      io_uring_prep_write(sqe, fd, buffer, buffer_size, 0);
-      io_uring_sqe_set_data(sqe, buffer);
-      sqe->flags |= IOSQE_IO_LINK;
-
-      sqe = io_uring_get_sqe(&ring);
-      while (!sqe) {
-              sqe = io_uring_get_sqe(&ring);
-          }
-
-      io_uring_prep_close(sqe, fd);
-
-      io_uring_submit(&ring);
-    } while (stream->Read(&request));
-
-    cq_thread.join();
-
-    io_uring_queue_exit(&ring);
-
-    time_total_uring += std::chrono::system_clock::now() - total_start;
-
-    std::stringstream ss;
-    ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
-        << " ms\n" << "time on open files is "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open_uring.time_since_epoch()).count()
-        << " ms\n" << "total time on server is "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
-        << " ms\n";
-    reply.set_stats(ss.str());
-    stream->Write(reply);
-
-    return Status::OK;
-  }
-
-  Status WriteFile(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
-    int fds[fn];
-    struct io_uring_sqe *sqe;
-    struct io_uring_cqe *cqe;
-    struct io_uring_params params;
-    struct io_uring ring;
-    int ret;
-    net::FileRequest request;
-    net::FileReply reply;
-    struct stat st;
-    void *data_buffer; /* this must be page-size aligned for direct io */
-
-    posix_memalign(&data_buffer, 512, buffer_size);
-
-    memset(&params, 0, sizeof(params));
-    if (io_uring_queue_init_params(queue_depth, &ring, &params)) {
-        perror("io_uring_queue_init_params");
-        std::cerr << "queue depth: " << queue_depth << std::endl;
-        return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
-    }
-
-    if (ret = io_uring_register_files(&ring, fds, fn)) {
-        printf("io_uring_register_files: %s\n", strerror(-ret));
-        return Status(StatusCode::UNKNOWN, "io_uring_register_files failed");
-    }
-
-    while (stream->Read(&request)) {
         sqe = io_uring_get_sqe(&ring);
-        if (!sqe) {
-            perror("io_uring_get_sqe");
-            reply.set_ok(false);
-            stream->Write(reply);
-            return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
-        }
+        while (!sqe) {
+                sqe = io_uring_get_sqe(&ring);
+            }
 
-        // extra mem copy since buffer must be aligned
-        memcpy(data_buffer, request.data().data(), buffer_size);
+        io_uring_prep_close(sqe, fd);
 
-        io_uring_prep_write(sqe, fds[request.file_num()], (const char*) data_buffer, buffer_size, 0);
-        if (io_uring_submit(&ring)) {
-            perror("io_uring_submit");
-            reply.set_ok(false);
-            stream->Write(reply);
-            return Status(StatusCode::UNKNOWN, "io_uring_submit failed");
-        }
+        io_uring_submit(&ring);
+        } while (stream->Read(&request));
 
-        ret = io_uring_wait_cqe(&ring, &cqe);
-        if (ret < 0) {
-            printf("io_uring_wait_cqe: %s\n", strerror(-ret));
-            reply.set_ok(false);
-            stream->Write(reply);
-            return Status(StatusCode::UNKNOWN, strerror(-ret));
-        }
-        if (cqe->res < 0) {
-            printf("io_uring cqe error: %s\n", strerror(-cqe->res));
-            reply.set_ok(false);
-            stream->Write(reply);
-            return Status(StatusCode::UNKNOWN, strerror(-cqe->res));
-        }
+        cq_thread.join();
 
-        reply.set_ok(true);
+        io_uring_queue_exit(&ring);
+
+        time_total_uring += std::chrono::system_clock::now() - total_start;
+
+        std::stringstream ss;
+        ss << "time on copy is " << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_copy_uring.time_since_epoch()).count()
+            << " ms\n" << "time on open files is "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(time_on_open_uring.time_since_epoch()).count()
+            << " ms\n" << "total time on server is "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(time_total_uring.time_since_epoch()).count()
+            << " ms\n";
+        reply.set_stats(ss.str());
         stream->Write(reply);
+
+        return Status::OK;
     }
 
-    return Status::OK;
-  }
+    Status WriteFile(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+        struct io_uring_sqe *sqe;
+        struct io_uring_cqe *cqe;
+        struct io_uring_params params;
+        struct io_uring ring;
+        int ret;
+        net::FileRequest request;
+        net::FileReply reply;
+        struct stat st;
+        void *data_buffer; /* this must be page-size aligned for direct io */
+
+        posix_memalign(&data_buffer, 512, buffer_size);
+        if (data_buffer == nullptr) {
+            perror("posix_memalign");
+            return Status(StatusCode::UNKNOWN, "posix_memalign failed");
+        }
+
+        memset(&params, 0, sizeof(params));
+        if (io_uring_queue_init_params(queue_depth, &ring, &params)) {
+            perror("io_uring_queue_init_params");
+            std::cerr << "queue depth: " << queue_depth << std::endl;
+            return Status(StatusCode::UNKNOWN, "io_uring_queue_init_params failed");
+        }
+
+        if (ret = io_uring_register_files(&ring, fds, fn)) {
+            printf("io_uring_register_files: %s\n", strerror(-ret));
+            return Status(StatusCode::UNKNOWN, "io_uring_register_files failed");
+        }
+
+        while (stream->Read(&request)) {
+            sqe = io_uring_get_sqe(&ring);
+            if (!sqe) {
+                perror("io_uring_get_sqe");
+                reply.set_ok(false);
+                stream->Write(reply);
+                return Status(StatusCode::UNKNOWN, "io_uring_get_sqe failed");
+            }
+
+            // extra mem copy since buffer must be aligned
+            memcpy(data_buffer, request.data().data(), buffer_size);
+
+            io_uring_prep_write(sqe, fds[request.file_num()], (const char*) data_buffer, buffer_size, 0);
+            if (io_uring_submit(&ring) != 1) {
+                perror("io_uring_submit");
+                reply.set_ok(false);
+                stream->Write(reply);
+                return Status(StatusCode::UNKNOWN, "io_uring_submit failed");
+            }
+
+            ret = io_uring_wait_cqe(&ring, &cqe);
+            if (ret < 0) {
+                printf("io_uring_wait_cqe: %s\n", strerror(-ret));
+                reply.set_ok(false);
+                stream->Write(reply);
+                return Status(StatusCode::UNKNOWN, strerror(-ret));
+            }
+            if (cqe->res < 0) {
+                printf("io_uring cqe error: %s\n", strerror(-cqe->res));
+                reply.set_ok(false);
+                stream->Write(reply);
+                return Status(StatusCode::UNKNOWN, strerror(-cqe->res));
+            }
+            io_uring_cqe_seen(&ring, cqe);
+
+            reply.set_ok(true);
+            stream->Write(reply);
+        }
+
+        return Status::OK;
+    }
 
     Status GetStat(ServerContext *ctx, const StatRequest *request, StatReply *reply) {
       std::stringstream ss;

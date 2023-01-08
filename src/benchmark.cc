@@ -74,7 +74,7 @@ struct io_worker {
     bool stopped;
     decltype(system_clock::now()) start_time;
 
-    void *data_buf;
+    char *data_buf;
     char notification_buf[32];
 
     /* rdma stuff */
@@ -178,7 +178,7 @@ void *do_io_io_uring(void *arg) {
         goto err;
     }
 
-    worker->data_buf = memalign(PAGESIZE, bs);
+    worker->data_buf = (char *) memalign(PAGESIZE, bs);
     if (!worker->data_buf) {
         perror("memalign");
         goto err;
@@ -234,8 +234,6 @@ void *do_io_grpc(void *arg) {
     channel_args.SetMaxReceiveMessageSize(-1);
     auto channel = CreateCustomChannel(grpc_endpoint, grpc::InsecureChannelCredentials(), channel_args);
     auto stub = net::File::NewStub(channel);
-    grpc::ClientContext stream_context;
-    std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>> stream;
 
     net::FileRequest request;
     net::FileReply reply;
@@ -244,11 +242,14 @@ void *do_io_grpc(void *arg) {
     grpc::ClientContext param_context;
     grpc::Status status;
 
-    worker->data_buf = memalign(PAGESIZE, bs);
+    worker->data_buf = (char *) memalign(PAGESIZE, bs);
     if (!worker->data_buf) {
         perror("memalign");
-        goto err;
+        pthread_exit((void *)1);
+        return NULL;
     }
+    memset(worker->data_buf, 1, bs);
+    // worker->data_buf[bs - 1] = 0;
 
     // set params on the server side
     param.set_buffer_size(bs);
@@ -257,11 +258,12 @@ void *do_io_grpc(void *arg) {
     status = stub->SetParameters(&param_context, param, &ack);
     if (!status.ok()) {
         std::cerr << "set parameters failed: " << status.error_message() << std::endl;
-        goto err;
+        pthread_exit((void *)1);
+        return NULL;
     }
 
-    
-    stream = std::make_unique<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>>(std::move(stub->WriteFile(&stream_context)));
+    grpc::ClientContext stream_context;
+    std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>> stream(stub->WriteFile(&stream_context));
 
     worker->start_time = system_clock::now();
     while (!runtime_exceeded(worker->start_time)) {
@@ -277,7 +279,7 @@ void *do_io_grpc(void *arg) {
             goto err;
         }
         worker->io_completed++;
-        std::cout << "io completed " << worker->io_completed << std::endl;
+        // std::cout << "io completed " << worker->io_completed << std::endl;
     }
 
     stream->WritesDone();
@@ -932,7 +934,7 @@ void *do_io_user_rdma(void *arg) {
         }
     }
     
-    worker->data_buf = memalign(PAGESIZE, bs);
+    worker->data_buf = (char *) memalign(PAGESIZE, bs);
     if (!worker->data_buf) {
         perror("memalign");
         goto err;
