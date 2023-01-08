@@ -41,11 +41,11 @@ public:
 
         ServerBuilder builder;
         builder.AddListeningPort(server_addr, grpc::InsecureServerCredentials());
-    builder.SetMaxReceiveMessageSize(INT_MAX);
+        builder.SetMaxReceiveMessageSize(INT_MAX);
         builder.RegisterService(this);
         std::unique_ptr<Server> server(builder.BuildAndStart());
         std::cout << "Server listening on " << server_addr << std::endl;
-          server->Wait();
+        server->Wait();
 
         return 0;
     }
@@ -447,7 +447,7 @@ public:
         return Status::OK;
     }
 
-    Status WriteFile(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+    Status WriteFileIOUring(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
         struct io_uring_sqe *sqe;
         struct io_uring_cqe *cqe;
         struct io_uring_params params;
@@ -455,7 +455,6 @@ public:
         int ret;
         net::FileRequest request;
         net::FileReply reply;
-        struct stat st;
         void *data_buffer; /* this must be page-size aligned for direct io */
 
         posix_memalign(&data_buffer, 512, buffer_size);
@@ -515,6 +514,48 @@ public:
             stream->Write(reply);
         }
 
+        return Status::OK;
+    }
+
+    Status WriteFilePosix(ServerContext *ctx, ServerReaderWriter<FileReply, FileRequest> *stream) {
+        int ret;
+        net::FileRequest request;
+        net::FileReply reply;
+        int cur_fd;
+        int written_bytes;
+        void *data_buffer; /* this must be page-size aligned for direct io */
+
+        posix_memalign(&data_buffer, 512, buffer_size);
+        if (data_buffer == nullptr) {
+            perror("posix_memalign");
+            return Status(StatusCode::UNKNOWN, "posix_memalign failed");
+        }
+
+        while (stream->Read(&request)) {
+            cur_fd = fds[request.file_num()];
+            memcpy(data_buffer, request.data().data(), buffer_size);
+
+            written_bytes = 0;
+            while (written_bytes < buffer_size) {
+                ret = write(cur_fd, (char *) data_buffer + written_bytes, buffer_size - written_bytes);
+                if (ret < 0) {
+                    perror("write");
+                    reply.set_ok(false);
+                    stream->Write(reply);
+                    return Status(StatusCode::UNKNOWN, strerror(-ret));
+                }
+                written_bytes += ret;
+            }
+            if (written_bytes > buffer_size) {
+                printf("written bytes > bs, something wrong!\n");
+                reply.set_ok(false);
+                stream->Write(reply);
+                return Status(StatusCode::UNKNOWN, "written bytes > bs, something wrong!");
+            }
+
+            reply.set_ok(true);
+            stream->Write(reply); 
+        }
         return Status::OK;
     }
 

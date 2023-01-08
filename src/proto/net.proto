@@ -36,7 +36,8 @@ service File {
 	rpc SetParameters(Parameters) returns (ACK) {}
 	rpc GetStat(StatRequest) returns (StatReply) {}
 	rpc ResetStat(StatRequest) returns (StatReply) {}
-	rpc WriteFile(stream FileRequest) returns (stream FileReply) {}
+	rpc WriteFileIOUring(stream FileRequest) returns (stream FileReply) {}
+	rpc WriteFilePosix(stream FileRequest) returns (stream FileReply) {}
 }
 
 message FileRequest {

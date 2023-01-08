@@ -45,6 +45,7 @@ unsigned runtime; /* in seconds */
 bool client;
 bool user_rdma;
 bool test_grpc;
+bool posix_write;
 std::string host;
 int base_port;
 bool event;
@@ -217,19 +218,78 @@ err:
     return NULL;
 }
 
+void *do_io_posix_write(void *arg) {
+    struct io_worker *worker = (struct io_worker *) arg;
+    struct stat st;
+    decltype(system_clock::now()) start;
+    int ret;
+    int cur_fd;
+    int written_bytes;
+
+    for (int i = 0; i < worker->num_files; i++) {
+        std::string my_test_file = test_file + "-" + std::to_string(worker->worker_id) + "-" + std::to_string(i);
+    
+        worker->fds[i] = open(my_test_file.data(), O_DIRECT | O_WRONLY | O_CREAT, 0644);
+        if (worker->fds[i] < 0) {
+            perror("open");
+            goto err;
+        }
+
+        if (fstat(worker->fds[i], &st)) {
+            perror("fstat");
+            goto err;
+        }
+
+        if (st.st_size != bs) {
+            printf("resizing test file %s, original size is %luB, setting to %luB\n", my_test_file.data(), st.st_size, bs);
+            if (fallocate(worker->fds[i], 0, 0, bs)) {
+                perror("fallocate");
+                goto err;
+            }
+        }
+    }
+
+    worker->data_buf = (char *) memalign(PAGESIZE, bs);
+    if (!worker->data_buf) {
+        perror("memalign");
+        goto err;
+    }
+
+    worker->start_time = system_clock::now();
+    while (!runtime_exceeded(worker->start_time)) {
+        int cur_fd = worker->fds[worker->cur_fd];
+        worker->cur_fd = (worker->cur_fd + 1) % worker->num_files;
+
+        written_bytes = 0;
+        while (written_bytes < bs) {
+            ret = write(cur_fd, worker->data_buf + written_bytes, bs - written_bytes);
+            if (ret < 0) {
+                perror("write");
+                goto err;
+            }
+            written_bytes += ret;
+        }
+        if (written_bytes > bs) {
+            printf("written bytes > bs, something wrong!\n");
+            goto err;
+        }
+        worker->io_completed++;
+    }
+
+    return NULL;
+
+err:
+    pthread_exit((void *)1);
+    return NULL;
+}
+
 void *do_io_grpc(void *arg) {
     struct io_worker *worker = (struct io_worker *) arg;
     void *data_buffer;
     decltype(system_clock::now()) start;
 
-    // grpc server code
-    if (!client) {
-        GRPCFileServerSync server(host, base_port + worker->worker_id);
-        server.run();
-    }
-
     // create grpc client
-    std::string grpc_endpoint = host + ":" + std::to_string(base_port + worker->worker_id);
+    std::string grpc_endpoint = host + ":" + std::to_string(base_port);
     grpc::ChannelArguments channel_args;
     channel_args.SetMaxReceiveMessageSize(-1);
     auto channel = CreateCustomChannel(grpc_endpoint, grpc::InsecureChannelCredentials(), channel_args);
@@ -241,15 +301,15 @@ void *do_io_grpc(void *arg) {
     net::ACK ack;
     grpc::ClientContext param_context;
     grpc::Status status;
+    grpc::ClientContext stream_context;
+    std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>> stream;
 
     worker->data_buf = (char *) memalign(PAGESIZE, bs);
     if (!worker->data_buf) {
         perror("memalign");
-        pthread_exit((void *)1);
-        return NULL;
+        goto err;
     }
     memset(worker->data_buf, 1, bs);
-    // worker->data_buf[bs - 1] = 0;
 
     // set params on the server side
     param.set_buffer_size(bs);
@@ -258,12 +318,13 @@ void *do_io_grpc(void *arg) {
     status = stub->SetParameters(&param_context, param, &ack);
     if (!status.ok()) {
         std::cerr << "set parameters failed: " << status.error_message() << std::endl;
-        pthread_exit((void *)1);
-        return NULL;
+        goto err;
     }
 
-    grpc::ClientContext stream_context;
-    std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>> stream(stub->WriteFile(&stream_context));
+    if (posix_write)
+        stream = std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>>(stub->WriteFilePosix(&stream_context));
+    else
+        stream = std::unique_ptr<grpc::ClientReaderWriter<net::FileRequest, net::FileReply>>(stub->WriteFileIOUring(&stream_context));
 
     worker->start_time = system_clock::now();
     while (!runtime_exceeded(worker->start_time)) {
@@ -1030,6 +1091,8 @@ struct io_worker *launch_worker(int cpu) {
         ret = pthread_create(&worker->tid, NULL, do_io_user_rdma, (void *) worker);
     else if (test_grpc)
         ret = pthread_create(&worker->tid, NULL, do_io_grpc, (void *) worker);
+    else if (posix_write)
+        ret = pthread_create(&worker->tid, NULL, do_io_posix_write, (void *) worker);
     else
         ret = pthread_create(&worker->tid, NULL, do_io_io_uring, (void *) worker);
 
@@ -1106,6 +1169,7 @@ int parse_args(int argc, char *argv[]) {
     program.add_argument("-event").help("sleep on cq events, default is poll").default_value(false).implicit_value(true);
     program.add_argument("-cores").help("number of io workers").default_value(1).scan<'i', int>();
     program.add_argument("-nt").help("whether to apply the notification mechanism").default_value(false).implicit_value(true);
+    program.add_argument("-posix-write").help("use posix write instead of io_uring").default_value(false).implicit_value(true);
 
     if (argc == 1) {
         printf("%s\n", program.help().str().data());
@@ -1130,6 +1194,7 @@ int parse_args(int argc, char *argv[]) {
         event = program.get<bool>("-event");
         num_workers = program.get<int>("-cores");
         nt = program.get<bool>("-nt");
+        posix_write = program.get<bool>("-posix-write");
     } catch (std::exception &e) {
         printf("%s\n", e.what());
         printf("%s\n", program.help().str().data());
@@ -1143,6 +1208,12 @@ int parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     if (parse_args(argc, argv))
         return 1;
+
+    if (!client && test_grpc) {
+        GRPCFileServerSync server(host, base_port);
+        server.run();
+        return 0;
+    }
 
     struct io_worker *workers[num_workers];
     pthread_t monitor_thread;
