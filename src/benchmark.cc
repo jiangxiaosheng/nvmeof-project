@@ -222,14 +222,8 @@ void *do_io_grpc(void *arg) {
     void *data_buffer;
     decltype(system_clock::now()) start;
 
-    // grpc server code
-    if (!client) {
-        GRPCFileServerSync server(host, base_port + worker->worker_id);
-        server.run();
-    }
-
     // create grpc client
-    std::string grpc_endpoint = host + ":" + std::to_string(base_port + worker->worker_id);
+    std::string grpc_endpoint = host + ":" + std::to_string(base_port);
     grpc::ChannelArguments channel_args;
     channel_args.SetMaxReceiveMessageSize(-1);
     auto channel = CreateCustomChannel(grpc_endpoint, grpc::InsecureChannelCredentials(), channel_args);
@@ -1143,6 +1137,12 @@ int parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     if (parse_args(argc, argv))
         return 1;
+
+    if (!client && test_grpc) {
+        GRPCFileServerSync server(host, base_port);
+        server.run();
+        return 0;
+    }
 
     struct io_worker *workers[num_workers];
     pthread_t monitor_thread;

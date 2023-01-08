@@ -486,7 +486,7 @@ public:
             }
 
             // extra mem copy since buffer must be aligned
-            memcpy(data_buffer, request.data().data(), buffer_size);
+            // memcpy(data_buffer, request.data().data(), buffer_size);
 
             io_uring_prep_write(sqe, fds[request.file_num()], (const char*) data_buffer, buffer_size, 0);
             if (io_uring_submit(&ring) != 1) {
